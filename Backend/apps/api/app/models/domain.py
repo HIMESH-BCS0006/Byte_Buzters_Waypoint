@@ -81,9 +81,8 @@ class ServiceAllowance(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     brand = Column(String, nullable=False)
-    rear_dock = Column(Integer, nullable=False)
-    street = Column(Integer, nullable=False)
-    mall_bay = Column(Integer, nullable=False)
+    dock_type = Column(String, nullable=False)
+    service_allowance_min = Column(Integer, nullable=False)
 
 
 class CalendarDay(Base):

@@ -96,9 +96,8 @@ def upgrade() -> None:
         "service_allowance",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("brand", sa.String(), nullable=False),
-        sa.Column("rear_dock", sa.Integer(), nullable=False),
-        sa.Column("street", sa.Integer(), nullable=False),
-        sa.Column("mall_bay", sa.Integer(), nullable=False),
+        sa.Column("dock_type", sa.String(), nullable=False),
+        sa.Column("service_allowance_min", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
 
