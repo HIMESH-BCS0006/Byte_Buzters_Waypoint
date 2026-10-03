@@ -366,13 +366,23 @@ def seed_reference_data(db: Session, force: bool = False) -> Dict[str, int]:
     print(f"[SEED] Successfully seeded reference data: {counts}")
     return counts
 
+
+def seed_all(db: Session, force: bool = False) -> dict:
+    """Seeds both reference data and walkthrough delivery day data."""
+    from app.seed.day_generator import seed_walkthrough_data
+    ref_counts = seed_reference_data(db, force=force)
+    day_counts = seed_walkthrough_data(db, force=force)
+    return {"reference": ref_counts, "walkthrough_day": day_counts}
+
+
 def run_seed_cli():
     """CLI entrypoint for running seed job."""
     db = SessionLocal()
     try:
-        seed_reference_data(db)
+        seed_all(db)
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     run_seed_cli()

@@ -552,7 +552,26 @@ def allocate(inp: AllocatorInput) -> AllocatorOutput:
                 elif all(trips_per_vehicle.get(v.vehicle_id, 0) >= MAX_TRIPS_PER_VEHICLE_PER_DAY for v in all_eligible):
                     code = DeferralCode.TRIP_LIMIT
                 else:
-                    code = DeferralCode.CAPACITY_FULL
+                    free_slot_vehicles = [v for v in all_eligible if trips_per_vehicle.get(v.vehicle_id, 0) < MAX_TRIPS_PER_VEHICLE_PER_DAY]
+                    if free_slot_vehicles and all(
+                        fuel_committed.get(v.vehicle_id, 0.0) + compute_trip_fuel(1, ref.districts[order.district], v.km_per_l) > v.weekly_fuel_quota_l
+                        for v in free_slot_vehicles
+                    ):
+                        code = DeferralCode.FUEL_QUOTA
+                    elif free_slot_vehicles and all(
+                        ((fresh_budget.get(v.vehicle_id, 0.0) + compute_trip_minutes([order], ref.districts[order.district], ref, order.brand) > BUDGET_FRESH_MIN)
+                         if order.brand == "Fresh" else
+                         (style_tech_budget.get(v.vehicle_id, 0.0) + compute_trip_minutes([order], ref.districts[order.district], ref, order.brand) > BUDGET_STYLE_TECH_MIN))
+                        for v in free_slot_vehicles
+                    ):
+                        code = DeferralCode.TIME_BUDGET
+                    elif free_slot_vehicles and all(
+                        (order.order_weight_kg > v.weight_cap_kg or order.order_volume_m3 > v.volume_cap_m3)
+                        for v in free_slot_vehicles
+                    ):
+                        code = DeferralCode.CAPACITY_FULL
+                    else:
+                        code = DeferralCode.CAPACITY_FULL
 
                 rec = diagnose_deferral(
                     order, code, ref, all_vrefs, vehicle_statuses, fuel_committed,

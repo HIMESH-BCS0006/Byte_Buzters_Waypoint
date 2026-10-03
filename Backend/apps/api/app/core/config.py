@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Business Clock & Demo Mode (D11)
     DEMO_MODE: bool = True
     DEMO_NOW: str = "2025-07-31T14:00:00+05:30"
+    SEED_DELIVERY_DATE: str = "2025-08-01"
     TIMEZONE: str = "Asia/Colombo"
     
     # Database
