@@ -25,12 +25,19 @@ SEED_PASSWORD = os.getenv("SEED_PASSWORD", "pass123")
 
 def find_seed_data_dir() -> str:
     """Finds seed data directory in relative paths."""
+    env_dir = os.getenv("SEED_DATA_DIR")
+    if env_dir and os.path.exists(env_dir) and os.path.exists(os.path.join(env_dir, "outlets.csv")):
+        return os.path.abspath(env_dir)
+
     candidates = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "db", "seed", "data")),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "db", "seed", "data")),
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "db", "seed", "data")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "db", "seed", "data")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "db", "seed", "data")),
         os.path.abspath("db/seed/data"),
         os.path.abspath("Backend/db/seed/data"),
+        os.path.abspath("Backend/apps/api/db/seed/data"),
+        os.path.abspath("/app/db/seed/data"),
+        os.path.abspath("/app/Backend/db/seed/data"),
         os.path.abspath("../db/seed/data"),
         os.path.abspath("../../db/seed/data"),
     ]

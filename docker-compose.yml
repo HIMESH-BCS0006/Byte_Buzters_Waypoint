@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   db:
@@ -35,6 +34,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./db/seed/data:/app/db/seed/data
     command: >
       sh -c "alembic upgrade head && python -m app.seed.loader && python -m app.seed.day_generator && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
