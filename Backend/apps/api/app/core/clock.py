@@ -1,8 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import zoneinfo
 from app.core.config import settings
 
-COLOMBO_TZ = zoneinfo.ZoneInfo(settings.TIMEZONE)
+try:
+    COLOMBO_TZ = zoneinfo.ZoneInfo(settings.TIMEZONE)
+except Exception:
+    COLOMBO_TZ = timezone(timedelta(hours=5, minutes=30), name="Asia/Colombo")
 
 def business_now() -> datetime:
     """
