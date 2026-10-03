@@ -26,6 +26,7 @@ This document maps all contract endpoints from `docs/spec/03-api-contract.md` to
 | GET | `/dispatch/queue` | `getDispatchQueue` | dispatcher | Covered |
 | POST | `/plans/generate` | `generatePlan` | dispatcher | Covered |
 | GET | `/plans` | `listPlans` | dispatcher | Covered |
+| GET | `/plans/{plan_run_id}/trips` | `getPlanRunTrips` | dispatcher | Covered |
 | POST | `/plans/validate` | `validatePlan` | dispatcher | Covered |
 | POST | `/trips/{id}/orders` | `addOrderToTrip` | dispatcher | Covered |
 | DELETE | `/trips/{id}/orders/{order_id}` | `removeOrderFromTrip` | dispatcher | Covered |
@@ -39,6 +40,7 @@ This document maps all contract endpoints from `docs/spec/03-api-contract.md` to
 | GET | `/fleet` | `getFleetAvailability` | dispatcher | Covered |
 | GET | `/monitoring/live` | `getLiveMonitoring` | dispatcher | Covered |
 | GET | `/alerts` | `listAlerts` | dispatcher | Covered |
+| GET | `/load-checks` | `listLoadChecks` | dispatcher | Covered |
 | POST | `/exceptions/{id}/decision` | `resolveExceptionDecision` | dispatcher | Covered |
 | POST | `/load-checks/{id}/resolve` | `resolveLoadCheck` | dispatcher | Covered |
 | GET | `/deferrals` | `listDeferrals` | dispatcher | Covered |
@@ -57,7 +59,7 @@ This document maps all contract endpoints from `docs/spec/03-api-contract.md` to
 | POST | `/sync` | `syncOfflineOperations` | driver | Covered |
 | GET | `/events/stream` | `getEventsStream` | reference | Covered |
 
-*Missing or Extra Endpoints:* None (exactly 48 operations defined in the contract and implemented in `openapi.yaml`).
+*Missing or Extra Endpoints:* None (exactly 50 operations defined in the contract and implemented in `openapi.yaml`).
 
 ---
 
