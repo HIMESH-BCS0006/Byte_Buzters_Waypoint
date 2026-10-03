@@ -11,6 +11,7 @@ from app.core.clock import business_now
 from app.core.errors import (
     AppException,
     ValidationException,
+    ForbiddenScopeException,
     InvalidTransitionException,
     NotOperatingDayException,
 )
@@ -20,9 +21,14 @@ from app.models.domain import (
     Order,
     Outlet,
     OutletServiceState,
+    Receipt,
     SyncOp,
     Trip,
     TripStop,
+)
+from app.schemas.field import (
+    RecordReceiptRequest,
+    ReceiptResponse,
 )
 from app.schemas.order import (
     CreateOrderRequest,
@@ -395,3 +401,62 @@ def get_outlet_expected_deliveries(db: Session, outlet_id: str) -> List[TripStop
         .all()
     )
     return stops
+
+
+def record_stop_receipt_service(
+    db: Session,
+    stop_id: str,
+    req: RecordReceiptRequest,
+    user_id: str,
+    user_outlet_id: Optional[str] = None,
+    user_role: str = "store_manager",
+) -> ReceiptResponse:
+    stop = db.query(TripStop).filter_by(id=stop_id).first()
+    if not stop:
+        raise AppException(code="STOP_NOT_FOUND", message=f"Stop {stop_id} not found", status_code=404)
+
+    order = db.query(Order).filter_by(id=stop.order_id).first()
+    if user_role == "store_manager" and user_outlet_id and order and order.outlet_id != user_outlet_id:
+        raise ForbiddenScopeException(f"Store manager of outlet '{user_outlet_id}' cannot confirm receipt for outlet '{order.outlet_id}'")
+
+    now_dt = business_now()
+    receipt_id = f"REC-{uuid.uuid4().hex[:8].upper()}"
+    rcp = Receipt(
+        id=receipt_id,
+        stop_id=stop.id,
+        outcome=req.outcome,
+        note=req.note,
+        confirmed_by=user_id,
+        confirmed_at=now_dt,
+    )
+    db.add(rcp)
+    stop.receipt_status = "CONFIRMED" if req.outcome == "full" else "DISCREPANCY"
+
+    if req.client_op_id:
+        db.add(SyncOp(
+            client_op_id=req.client_op_id,
+            device_id="store_web",
+            client_seq=1,
+            user_id=user_id,
+            op_type="record_receipt",
+            payload={"stop_id": stop.id, "outcome": req.outcome},
+            client_ts=now_dt,
+            received_at=now_dt,
+            applied_at=now_dt,
+            result="applied",
+            reason=None,
+        ))
+
+    db.commit()
+    db.refresh(rcp)
+
+    emit_event(
+        db,
+        event_type="receipt.confirmed",
+        payload={"receipt_id": rcp.id, "stop_id": stop.id, "outcome": req.outcome},
+        audience_role="dispatcher",
+        audience_scope=None,
+        notification_message=f"Receipt confirmed ({req.outcome}) for stop {stop.id}",
+    )
+
+    return ReceiptResponse.model_validate(rcp)

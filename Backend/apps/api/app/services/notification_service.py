@@ -18,6 +18,7 @@ def emit_event(
     audience_role: Optional[str] = None,
     audience_scope: Optional[str] = None,
     notification_message: Optional[str] = None,
+    message: Optional[str] = None,
 ) -> Event:
     """
     Creates an Event and optionally a Notification.
@@ -40,7 +41,7 @@ def emit_event(
             event_id=event_id,
             audience_role=audience_role,
             audience_scope=audience_scope,
-            message=notification_message or f"Event {event_type}",
+            message=message or notification_message or f"Event {event_type}",
             created_at=now,
         )
         db.add(notif)

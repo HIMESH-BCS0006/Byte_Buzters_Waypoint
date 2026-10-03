@@ -16,6 +16,7 @@ from app.schemas.order import (
 )
 from app.schemas.planning import TripStopResponse
 from app.schemas.notification import NotificationResponse
+from app.schemas.field import RecordReceiptRequest, ReceiptResponse
 from app.services.order_service import (
     create_order,
     list_orders,
@@ -23,6 +24,7 @@ from app.services.order_service import (
     cancel_order,
     get_outlet_expected_deliveries,
     enrich_order_response,
+    record_stop_receipt_service,
 )
 from app.services.notification_service import (
     get_user_notifications,
@@ -101,6 +103,30 @@ def get_expected_deliveries_endpoint(
 ):
     stops = get_outlet_expected_deliveries(db, outlet_id=id)
     return [TripStopResponse.model_validate(s) for s in stops]
+
+
+@router.post(
+    "/stops/{id}/receipt",
+    response_model=ReceiptResponse,
+    operation_id="recordStopReceipt",
+)
+def record_stop_receipt_endpoint(
+    id: str,
+    req: RecordReceiptRequest,
+    claims: dict = Depends(require_roles(["store_manager", "dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    user_id = claims.get("sub", "store_manager")
+    outlet_id = claims.get("outlet_id")
+    role = claims.get("role", "store_manager")
+    return record_stop_receipt_service(
+        db,
+        stop_id=id,
+        req=req,
+        user_id=user_id,
+        user_outlet_id=outlet_id,
+        user_role=role,
+    )
 
 
 @router.get(

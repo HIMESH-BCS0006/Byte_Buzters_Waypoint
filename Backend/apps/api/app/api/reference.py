@@ -1,13 +1,15 @@
 import os
 import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.security import HTTPAuthorizationCredentials
+from starlette.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import require_roles
-from app.models.domain import Outlet, Vehicle, CalendarDay
+from app.core.security import require_roles, decode_access_token, security_scheme
+from app.models.domain import Outlet, Vehicle, CalendarDay, Event, Notification
 from app.schemas.reference import (
     OutletRefResponse,
     VehicleRefResponse,
@@ -15,7 +17,7 @@ from app.schemas.reference import (
     RefConfigResponse,
 )
 
-router = APIRouter(prefix="/ref", tags=["reference"])
+router = APIRouter(tags=["reference"])
 
 ALLOWED_ROLES = ["dispatcher", "loader", "driver", "store_manager"]
 
@@ -37,7 +39,7 @@ def load_unit_constants() -> Optional[dict]:
     return None
 
 
-@router.get("/outlets", response_model=List[OutletRefResponse])
+@router.get("/ref/outlets", response_model=List[OutletRefResponse], operation_id="getRefOutlets")
 def get_ref_outlets(
     claims: dict = Depends(require_roles(ALLOWED_ROLES)),
     db: Session = Depends(get_db),
@@ -63,7 +65,7 @@ def get_ref_outlets(
     return result
 
 
-@router.get("/vehicles", response_model=List[VehicleRefResponse])
+@router.get("/ref/vehicles", response_model=List[VehicleRefResponse], operation_id="getRefVehicles")
 def get_ref_vehicles(
     claims: dict = Depends(require_roles(ALLOWED_ROLES)),
     db: Session = Depends(get_db),
@@ -88,7 +90,7 @@ def get_ref_vehicles(
     return result
 
 
-@router.get("/calendar", response_model=List[CalendarDayRefResponse])
+@router.get("/ref/calendar", response_model=List[CalendarDayRefResponse], operation_id="getRefCalendar")
 def get_ref_calendar(
     claims: dict = Depends(require_roles(ALLOWED_ROLES)),
     db: Session = Depends(get_db),
@@ -115,7 +117,7 @@ def get_ref_calendar(
     return result
 
 
-@router.get("/config", response_model=RefConfigResponse)
+@router.get("/ref/config", response_model=RefConfigResponse, operation_id="getRefConfig")
 def get_ref_config(
     claims: dict = Depends(require_roles(ALLOWED_ROLES)),
 ):
@@ -128,3 +130,53 @@ def get_ref_config(
         business_clock=settings.DEMO_NOW,
         demo_mode=settings.DEMO_MODE,
     )
+
+
+@router.get(
+    "/events/stream",
+    operation_id="getEventsStream",
+)
+def get_events_stream_endpoint(
+    stream_token: Optional[str] = Query(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: Session = Depends(get_db),
+):
+    claims = {}
+    token = stream_token or (credentials.credentials if credentials else None)
+    if token:
+        try:
+            claims = decode_access_token(token)
+        except Exception:
+            pass
+
+    user_role = claims.get("role")
+    user_outlet_id = claims.get("outlet_id")
+    user_vehicle_id = claims.get("vehicle_id")
+    user_depot_ids = claims.get("depot_ids", [])
+
+    def event_generator():
+        # Yield connection acknowledged
+        yield f"event: connected\ndata: {json.dumps({'status': 'connected', 'role': user_role})}\n\n"
+
+        events = db.query(Event).order_by(Event.created_at.desc()).limit(20).all()
+        for ev in reversed(events):
+            notif = db.query(Notification).filter_by(event_id=ev.id).first()
+            if notif:
+                if user_role and notif.audience_role and user_role != "dispatcher" and notif.audience_role != user_role:
+                    continue
+                if user_role == "store_manager" and user_outlet_id and notif.audience_scope and notif.audience_scope != user_outlet_id:
+                    continue
+                if user_role == "driver" and user_vehicle_id and notif.audience_scope and notif.audience_scope != user_vehicle_id:
+                    continue
+                if user_role in ["loader", "dispatcher"] and user_depot_ids and notif.audience_scope and notif.audience_scope not in user_depot_ids:
+                    continue
+
+            payload_data = {
+                "id": ev.id,
+                "type": ev.type,
+                "payload": ev.payload,
+                "created_at": ev.created_at.isoformat() if ev.created_at else None,
+            }
+            yield f"event: {ev.type}\ndata: {json.dumps(payload_data)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

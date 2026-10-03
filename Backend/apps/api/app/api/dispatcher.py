@@ -28,6 +28,14 @@ from app.schemas.planning import (
     ValidatePlanResponse,
     VehicleAvailabilityResponse,
 )
+from app.schemas.field import (
+    AlertResponseItem,
+    ExceptionDecisionRequest,
+    ExceptionResponse,
+    LiveMonitoringResponse,
+    LoadCheckResponse,
+    ResolveLoadCheckRequest,
+)
 from app.services.order_service import (
     defer_order_manually,
     enrich_order_response,
@@ -49,6 +57,15 @@ from app.services.planning_service import (
     remove_order_from_trip_service,
     validate_plan_service,
 )
+from app.services.monitoring_service import (
+    get_live_monitoring_service,
+    get_outlet_skip_history_service,
+    list_alerts_service,
+    list_deferrals_service,
+    list_load_checks_service,
+    resolve_exception_decision_service,
+)
+from app.services.loader_service import resolve_load_check_service
 
 router = APIRouter(tags=["dispatcher"])
 
@@ -286,3 +303,103 @@ def get_fleet_availability_endpoint(
 ):
     target_depot = check_depot_scope(depot_id, claims)
     return get_fleet_availability_service(db, depot_id=target_depot, target_date=date)
+
+
+@router.get(
+    "/monitoring/live",
+    response_model=LiveMonitoringResponse,
+    operation_id="getLiveMonitoring",
+)
+def get_live_monitoring_endpoint(
+    depot_id: Optional[str] = Query(None),
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    target_depot = check_depot_scope(depot_id, claims)
+    return get_live_monitoring_service(db, depot_id=target_depot)
+
+
+@router.get(
+    "/alerts",
+    response_model=List[AlertResponseItem],
+    operation_id="listAlerts",
+)
+def list_alerts_endpoint(
+    depot_id: Optional[str] = Query(None),
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    target_depot = check_depot_scope(depot_id, claims)
+    return list_alerts_service(db, depot_id=target_depot)
+
+
+@router.post(
+    "/exceptions/{id}/decision",
+    response_model=ExceptionResponse,
+    operation_id="resolveExceptionDecision",
+)
+def resolve_exception_decision_endpoint(
+    id: str,
+    req: ExceptionDecisionRequest,
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    user_id = claims.get("sub", "dispatcher")
+    return resolve_exception_decision_service(db, exception_id=id, req=req, user_id=user_id)
+
+
+@router.get(
+    "/load-checks",
+    response_model=List[LoadCheckResponse],
+    operation_id="listLoadChecks",
+)
+def list_load_checks_endpoint(
+    status: Optional[str] = Query(None),
+    depot_id: Optional[str] = Query(None),
+    claims: dict = Depends(require_roles(["dispatcher", "loader"])),
+    db: Session = Depends(get_db),
+):
+    target_depot = check_depot_scope(depot_id, claims)
+    return list_load_checks_service(db, status=status, depot_id=target_depot)
+
+
+@router.post(
+    "/load-checks/{id}/resolve",
+    response_model=LoadCheckResponse,
+    operation_id="resolveLoadCheck",
+)
+def resolve_load_check_endpoint(
+    id: str,
+    req: ResolveLoadCheckRequest,
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    user_id = claims.get("sub", "dispatcher")
+    return resolve_load_check_service(db, load_check_id=id, req=req, user_id=user_id)
+
+
+@router.get(
+    "/deferrals",
+    response_model=List[DeferralResponse],
+    operation_id="listDeferrals",
+)
+def list_deferrals_endpoint(
+    depot_id: Optional[str] = Query(None),
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    target_depot = check_depot_scope(depot_id, claims)
+    return list_deferrals_service(db, depot_id=target_depot)
+
+
+@router.get(
+    "/outlets/{id}/skip-history",
+    response_model=List[DeferralResponse],
+    operation_id="getOutletSkipHistory",
+)
+def get_outlet_skip_history_endpoint(
+    id: str,
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    return get_outlet_skip_history_service(db, outlet_id=id)

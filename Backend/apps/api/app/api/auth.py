@@ -9,12 +9,12 @@ from app.services.auth_service import login_user, build_user_me_response
 
 router = APIRouter(tags=["auth"])
 
-@router.post("/auth/login", response_model=TokenResponse, summary="Authenticate user and receive JWT bearer token")
+@router.post("/auth/login", response_model=TokenResponse, summary="Authenticate user and receive JWT bearer token", operation_id="login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """Logs in user with username and password, returning JWT token with role & depot scope claims (D24)."""
     return login_user(db, payload.username, payload.password)
 
-@router.get("/me", response_model=UserMeResponse, summary="Get current logged in user claims and profile")
+@router.get("/me", response_model=UserMeResponse, summary="Get current logged in user claims and profile", operation_id="getCurrentUser")
 def get_me(
     claims: dict = Depends(get_current_user_claims),
     db: Session = Depends(get_db),
