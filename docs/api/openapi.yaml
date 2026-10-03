@@ -820,6 +820,100 @@ paths:
                 items:
                   $ref: '#/components/schemas/PlanRun'
 
+  /plans/{plan_run_id}/trips:
+    get:
+      operationId: getPlanRunTrips
+      summary: Get all trips for a specific plan run
+      tags:
+        - dispatcher
+      x-role:
+        - dispatcher
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: plan_run_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: RUN-20250801-PEL
+        - name: depot_id
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Peliyagoda
+      responses:
+        '200':
+          description: List of trip details for the plan run
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripDetail'
+              example:
+                - trip:
+                    id: TRIP-20250801-01
+                    plan_run_id: RUN-20250801-PEL
+                    delivery_date: "2025-08-01"
+                    trip_no: 1
+                    brand: Fresh
+                    district: Colombo
+                    depot_id: Peliyagoda
+                    vehicle_id: VEH001
+                    vehicle_type: truck
+                    vehicle_temp: chilled
+                    stop_count: 3
+                    depart_time: "03:30"
+                    plan_version: 1
+                    status: CONFIRMED
+                    weight_used_kg: 2400.0
+                    weight_cap_kg: 3610.0
+                    volume_used_m3: 12.5
+                    volume_cap_m3: 19.4
+                    est_minutes: 112
+                    est_fuel_l: 12.4
+                    time_budget_min: 270
+                  stops:
+                    - id: STOP-001
+                      trip_id: TRIP-20250801-01
+                      order_id: ORD-001
+                      seq: 1
+                      outlet_id: OUT004
+                      outlet_name: Fresh Store Colombo 04
+                      district: Colombo
+                      dock_type: rear_dock
+                      parking_constraint: normal
+                      order_units: 50
+                      order_weight_kg: 800.0
+                      order_volume_m3: 4.1
+                      window_open_time: "04:00"
+                      window_close_time: "07:30"
+                      eta: "04:15"
+                      service_start_est: "04:15"
+                      service_min: 15
+                      status: PENDING
+                      receipt_status: NONE
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Plan run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /plans/validate:
     post:
       operationId: validatePlan
@@ -1276,8 +1370,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/LiveMonitoringResponse'
               example:
-                last_synced_at: "2025-08-01T06:45:00+05:30"
-                trips: []
+                last_synced_at: "2025-08-01T07:15:00+05:30"
+                trips:
+                  - vehicle_id: VEH001
+                    driver_name: DRV-001 (Sunil)
+                    trip_status: IN_PROGRESS
+                    brand: Fresh
+                    district: Colombo
+                    stops_completed: 1
+                    stops_total: 3
+                    next_stop:
+                      outlet_id: OUT004
+                      eta: "08:15"
+                    delay_min: 20
+                    health: delayed
+                    open_exceptions:
+                      - id: EXC-001
+                        trip_id: TRIP-20250801-01
+                        stop_id: null
+                        affected_stop_ids: ["STOP-002", "STOP-003"]
+                        type: vehicle_issue
+                        note: Minor engine overheating, delayed by 20 minutes
+                        reported_at: "2025-08-01T07:10:00+05:30"
+                        status: OPEN
+                    stops:
+                      - id: STOP-001
+                        outlet_id: OUT001
+                        status: DELIVERED
+                        eta: "04:15"
+                        projected_arrival: "04:15"
+                        at_risk: false
+                        window_close_time: "07:30"
+                        parking_constraint: van_only
+                        arrived_at: "2025-08-01T04:12:00+05:30"
+                        completed_at: "2025-08-01T04:28:00+05:30"
+                        pod_recorded: true
+                      - id: STOP-002
+                        outlet_id: OUT004
+                        status: PENDING
+                        eta: "07:55"
+                        projected_arrival: "08:15"
+                        at_risk: true
+                        window_close_time: "07:30"
+                        parking_constraint: normal
+                        arrived_at: null
+                        completed_at: null
+                        pod_recorded: false
 
   /alerts:
     get:
@@ -1307,11 +1445,23 @@ paths:
                   $ref: '#/components/schemas/AlertItem'
               example:
                 - id: ALT001
+                  type: shortfall
+                  severity: critical
+                  status: open
+                  message: Warehouse loading shortfall reported on TRIP-20250801-01 (ORD-001, 10 units missing)
+                  created_at: "2025-08-01T03:15:00+05:30"
+                - id: ALT002
                   type: exception
                   severity: warning
                   status: open
-                  message: Vehicle issue reported on TRIP-20250801-01
+                  message: Vehicle issue reported on TRIP-20250801-01 for VEH001
                   created_at: "2025-08-01T07:10:00+05:30"
+                - id: ALT003
+                  type: repeat_deferral
+                  severity: warning
+                  status: open
+                  message: Outlet OUT004 has 2 consecutive deferrals
+                  created_at: "2025-08-01T04:00:00+05:30"
 
   /exceptions/{id}/decision:
     post:
@@ -1348,6 +1498,66 @@ paths:
                 $ref: '#/components/schemas/Exception'
         '422':
           description: Hard constraint violation (e.g. retrying a mall stop past window)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /load-checks:
+    get:
+      operationId: listLoadChecks
+      summary: List warehouse loading checks and shortfalls
+      tags:
+        - dispatcher
+      x-role:
+        - dispatcher
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/LoadCheckStatus'
+          example: OPEN
+        - name: depot_id
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Peliyagoda
+      responses:
+        '200':
+          description: List of loading checks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoadCheck'
+              example:
+                - id: LC001
+                  trip_id: TRIP-20250801-01
+                  order_id: ORD-001
+                  plan_version: 1
+                  expected_qty: 50
+                  loaded_qty: 40
+                  issue: missing
+                  note: Shortage of 10 units at warehouse dock
+                  status: OPEN
+                  reported_by: loader1
+                  vehicle_id: VEH001
+                  outlet_id: OUT004
+                  outlet_name: Fresh Store Colombo 04
+                  bay: Bay 2
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden scope
           content:
             application/json:
               schema:
@@ -2809,6 +3019,19 @@ components:
           type: number
         volume_cap_m3:
           type: number
+        est_minutes:
+          type: integer
+          nullable: true
+          example: 112
+        est_fuel_l:
+          type: number
+          nullable: true
+          example: 12.4
+        time_budget_min:
+          type: integer
+          enum: [270, 480]
+          nullable: true
+          example: 270
       description: Lightweight trip summary object used in loader and driver lists (D23).
 
     StopDetail:
@@ -2864,6 +3087,10 @@ components:
         eta:
           type: string
           nullable: true
+        service_start_est:
+          type: string
+          nullable: true
+          example: "04:15"
         service_min:
           type: integer
         status:
@@ -3025,6 +3252,22 @@ components:
           type: string
           nullable: true
           description: Dispatcher user ID resolving shortfall.
+        vehicle_id:
+          type: string
+          nullable: true
+          example: VEH001
+        outlet_id:
+          type: string
+          nullable: true
+          example: OUT004
+        outlet_name:
+          type: string
+          nullable: true
+          example: Fresh Store Colombo 04
+        bay:
+          type: string
+          nullable: true
+          example: Bay 2
       description: Warehouse loading shortfall audit record.
 
     Deferral:
@@ -3130,7 +3373,6 @@ components:
       required:
         - id
         - trip_id
-        - stop_id
         - type
         - reported_at
         - status
@@ -3143,7 +3385,14 @@ components:
           description: Affected trip ID.
         stop_id:
           type: string
-          description: Affected stop ID.
+          nullable: true
+          description: Affected stop ID (null for trip-level vehicle_issue).
+        affected_stop_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: List of stop IDs affected by a trip-level exception.
         type:
           $ref: '#/components/schemas/ExceptionType'
         note:
@@ -3978,6 +4227,11 @@ components:
               health:
                 type: string
                 enum: [on_schedule, delayed, blocked]
+              open_exceptions:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Exception'
+                default: []
               stops:
                 type: array
                 items:
@@ -3998,6 +4252,19 @@ components:
                     eta:
                       type: string
                       nullable: true
+                    projected_arrival:
+                      type: string
+                      nullable: true
+                      example: "08:15"
+                    at_risk:
+                      type: boolean
+                      example: true
+                    window_close_time:
+                      type: string
+                      nullable: true
+                      example: "08:00"
+                    parking_constraint:
+                      $ref: '#/components/schemas/ParkingConstraint'
                     arrived_at:
                       type: string
                       format: date-time
@@ -4008,7 +4275,7 @@ components:
                       nullable: true
                     pod_recorded:
                       type: boolean
-      description: Live monitoring dashboard payload with nested trips and stops (D21).
+      description: Live monitoring dashboard payload with nested trips, stops, and open exceptions (D21).
 
     AlertItem:
       type: object
