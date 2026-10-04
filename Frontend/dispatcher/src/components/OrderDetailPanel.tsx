@@ -25,12 +25,14 @@ interface OrderDetailPanelProps {
   order: Order;
   outlet?: Outlet;
   onClose: () => void;
+  onCancelOrder?: (order: Order) => void;
 }
 
 export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
   order,
   outlet,
   onClose,
+  onCancelOrder,
 }) => {
   const queryClient = useQueryClient();
 
@@ -254,9 +256,19 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
             <div>
               {!showCancelForm ? (
                 <button
-                  onClick={() => setShowCancelForm(true)}
-                  className="w-full border border-red-300 text-red-700 hover:bg-red-50 text-xs font-semibold py-2 px-4 rounded-md transition-colors"
+                  onClick={() => {
+                    if (onCancelOrder) {
+                      onCancelOrder(displayOrder);
+                    } else {
+                      setShowCancelForm(true);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 border border-red-300 text-red-700 hover:bg-red-50 text-xs font-semibold py-2 px-4 rounded-lg transition-colors"
                 >
+                  <svg className="w-3.5 h-3.5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
                   Cancel Order…
                 </button>
               ) : (

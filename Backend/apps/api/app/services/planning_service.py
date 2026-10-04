@@ -149,7 +149,7 @@ def generate_plan_service(
                 is_locked=True,
             ))
 
-        # Delete existing DRAFT trips and stops
+        # Delete existing DRAFT trips and stops cleanly
         draft_trips = (
             db.query(Trip)
             .filter(
@@ -159,15 +159,23 @@ def generate_plan_service(
             )
             .all()
         )
-        for dt in draft_trips:
-            draft_stops = db.query(TripStop).filter_by(trip_id=dt.id).all()
+        draft_trip_ids = [dt.id for dt in draft_trips]
+        if draft_trip_ids:
+            # Revert order statuses for orders on these draft trips to SUBMITTED
+            draft_stops = db.query(TripStop).filter(TripStop.trip_id.in_(draft_trip_ids)).all()
             for ds in draft_stops:
                 ord_rec = db.query(Order).filter_by(id=ds.order_id).first()
                 if ord_rec and ord_rec.status == "PLANNED":
                     ord_rec.status = "SUBMITTED"
-                db.delete(ds)
-            db.delete(dt)
-        db.flush()
+            db.flush()
+
+            # Delete TripStops first to satisfy foreign key constraint
+            db.query(TripStop).filter(TripStop.trip_id.in_(draft_trip_ids)).delete(synchronize_session=False)
+            db.flush()
+
+            # Delete Trips
+            db.query(Trip).filter(Trip.id.in_(draft_trip_ids)).delete(synchronize_session=False)
+            db.flush()
 
     # 3. Fetch Available Vehicles
     avail_records = (
@@ -197,17 +205,23 @@ def generate_plan_service(
         for fl in fuel_records
     ]
 
-    # 5. Fetch SUBMITTED Orders for this depot and delivery date
+    # 5. Fetch SUBMITTED and DEFERRED Orders for this depot and delivery date
     submitted_orders = (
         db.query(Order)
         .join(Outlet, Order.outlet_id == Outlet.id)
         .filter(
             Outlet.depot_id == depot_id,
             Order.delivery_date == delivery_date,
-            Order.status == "SUBMITTED",
+            Order.status.in_(["SUBMITTED", "DEFERRED"]),
         )
         .all()
     )
+
+    # If regenerating, clean up existing deferrals for these orders so optimizer can re-evaluate
+    if req.regenerate:
+        for so in submitted_orders:
+            db.query(Deferral).filter_by(order_id=so.id, from_delivery_date=delivery_date).delete()
+        db.flush()
 
     # Fetch outlet service states for priority history
     service_states = {
@@ -630,6 +644,9 @@ def add_order_to_trip_service(db: Session, trip_id: str, order_id: str) -> TripR
 
     # Update order status
     order.status = "SCHEDULED" if trip.status == "CONFIRMED" else "PLANNED"
+
+    # Remove any existing deferral record
+    db.query(Deferral).filter_by(order_id=order.id).delete()
 
     # Bump plan_version if confirmed
     if trip.status == "CONFIRMED":
@@ -1101,7 +1118,7 @@ def get_fleet_availability_service(
 
 
 def get_dispatch_queue_service(db: Session, depot_id: Optional[str] = None) -> List[Order]:
-    query = db.query(Order).filter(Order.status == "SUBMITTED")
+    query = db.query(Order).filter(Order.status.in_(["SUBMITTED", "DEFERRED"]))
     if depot_id:
         query = query.join(Outlet, Order.outlet_id == Outlet.id).filter(Outlet.depot_id == depot_id)
     return query.order_by(Order.delivery_date.asc(), Order.placed_at.asc()).all()

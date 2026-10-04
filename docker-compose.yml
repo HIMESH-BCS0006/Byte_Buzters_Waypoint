@@ -50,6 +50,18 @@ services:
     depends_on:
       - api
 
+  store_manager:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: waypoint_store_manager
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
+
 

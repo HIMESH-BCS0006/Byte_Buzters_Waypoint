@@ -1,4 +1,5 @@
 export const DEFAULT_DEPOT = 'Peliyagoda';
+export const DEFAULT_DELIVERY_DATE = '2025-08-01';
 export const DEPOTS = ['Peliyagoda', 'Kandy'];
 export const TIMEZONE = 'Asia/Colombo';
 

@@ -102,6 +102,9 @@ export function useGeneratePlan() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['planningTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['unplannedOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dispatchQueue'] });
     },
@@ -128,8 +131,10 @@ export function useConfirmTrip() {
         method: 'POST',
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planTrips'] });
       queryClient.invalidateQueries({ queryKey: ['planningTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['unplannedOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dispatchQueue'] });
     },
@@ -145,7 +150,10 @@ export function useCancelTrip() {
         method: 'POST',
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['planningTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['unplannedOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dispatchQueue'] });
     },
@@ -162,7 +170,10 @@ export function useAddOrderToTrip() {
         data: { order_id: orderId },
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['planningTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['unplannedOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dispatchQueue'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
@@ -178,7 +189,10 @@ export function useRemoveOrderFromTrip() {
         method: 'DELETE',
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['planningTrips'] });
+      queryClient.invalidateQueries({ queryKey: ['unplannedOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dispatchQueue'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },

@@ -16,7 +16,8 @@ export function useOutletMap(): {
   const outletsById = useMemo(() => {
     if (!outlets) return {} as Record<string, Outlet>;
     return outlets.reduce<Record<string, Outlet>>((acc, o) => {
-      acc[o.outlet_id] = o;
+      if (o.outlet_id) acc[o.outlet_id] = o;
+      if ((o as any).id) acc[(o as any).id] = o;
       return acc;
     }, {});
   }, [outlets]);

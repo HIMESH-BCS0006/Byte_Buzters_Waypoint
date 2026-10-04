@@ -12,7 +12,9 @@ export const useGetUnplannedOrders = (params?: { depot_id?: string }) => {
         params,
         signal,
       });
-      return orders.filter((o) => o.status === 'SUBMITTED' || !o.trip_id);
+      return (orders || []).filter(
+        (o) => o.status === 'SUBMITTED' || o.status === 'DEFERRED'
+      );
     },
   });
 };

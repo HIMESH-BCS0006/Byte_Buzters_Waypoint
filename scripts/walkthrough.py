@@ -257,12 +257,16 @@ class WalkthroughRunner:
         # Use driver token for that vehicle
         custom_driver_headers = driver_headers
 
-        r_start = self.client.post(f"{self.base_url}/trips/{trip_id}/start", json={
-            "plan_version": current_version,
-        }, headers=custom_driver_headers)
+        # Fetch remaining stops and select store manager's stop or any available stop
+        trip_entry = next((t for t in r_updated_trips.json() if t["trip"]["id"] == trip_id and len(t["stops"]) > 0), None)
+        if not trip_entry:
+            trip_entry = next(t for t in r_updated_trips.json() if len(t["stops"]) > 0)
+            trip_id = trip_entry["trip"]["id"]
+            current_version = trip_entry["trip"]["plan_version"]
 
-        # Fetch remaining stops and select store manager's stop
-        r_stops_detail = next(t["stops"] for t in r_updated_trips.json() if t["trip"]["id"] == trip_id)
+        r_start = self.client.post(f"{self.base_url}/trips/{trip_id}/start", json={"plan_version": current_version}, headers=custom_driver_headers)
+
+        r_stops_detail = trip_entry["stops"]
         remaining_stop = next((s for s in r_stops_detail if s.get("order_id") == placed_order_id or s.get("outlet_id") == store_oid), r_stops_detail[0])
         stop_id = remaining_stop["id"]
 

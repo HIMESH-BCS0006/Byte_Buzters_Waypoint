@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../api/generated/models';
 import { getCurrentUser } from '../api/generated/auth/auth';
-import { DEFAULT_DEPOT } from '../lib/constants';
+import { DEFAULT_DEPOT, DEFAULT_DELIVERY_DATE } from '../lib/constants';
 
 interface AuthContextType {
   user: User | null;
@@ -26,9 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedDepot, setSelectedDepot] = useState<string>(DEFAULT_DEPOT);
-  const [deliveryDate, setDeliveryDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [deliveryDate, setDeliveryDate] = useState<string>(DEFAULT_DELIVERY_DATE);
 
   useEffect(() => {
     if (!token) {
