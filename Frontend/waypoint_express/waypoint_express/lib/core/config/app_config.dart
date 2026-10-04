@@ -19,8 +19,8 @@ class AppConfig {
   static String activeBaseUrl = defaultBaseUrl;
 
   // Dev Accounts
-  static const String devDriverUsername = 'driver@waypoint.com';
-  static const String devLoaderUsername = 'loader@waypoint.com';
+  static const String devDriverUsername = 'driver@waypoint.test';
+  static const String devLoaderUsername = 'loader@waypoint.test';
   static const String devPassword = 'pass123';
 
   // Simulated Offline toggle (debug helper)

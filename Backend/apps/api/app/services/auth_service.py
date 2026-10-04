@@ -10,29 +10,6 @@ def authenticate_user(db: Session, username: str, password: str) -> User:
     """Authenticates username and password against DB."""
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        # Fallback check for domain alias (@waypoint.com <-> @waypoint.test)
-        alt_username = None
-        if username.endswith("@waypoint.com"):
-            alt_username = username.replace("@waypoint.com", "@waypoint.test")
-        elif username.endswith("@waypoint.test"):
-            alt_username = username.replace("@waypoint.test", "@waypoint.com")
-        
-        if alt_username:
-            user = db.query(User).filter(User.username == alt_username).first()
-            
-        if not user:
-            # Fallback by role prefix
-            clean_u = username.lower()
-            if "dispatcher" in clean_u:
-                user = db.query(User).filter(User.role == "dispatcher").first()
-            elif "loader" in clean_u:
-                user = db.query(User).filter(User.role == "loader").first()
-            elif "driver" in clean_u:
-                user = db.query(User).filter(User.role == "driver").first()
-            elif "store" in clean_u or "manager" in clean_u:
-                user = db.query(User).filter(User.role == "store_manager").first()
-
-    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"

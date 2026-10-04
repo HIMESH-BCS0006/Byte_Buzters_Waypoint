@@ -6,7 +6,7 @@ import { ErrorState } from '../components/ErrorState';
 import { ApiError } from '../api/http';
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('dispatcher@waypoint.com');
+  const [username, setUsername] = useState('dispatcher@waypoint.test');
   const [password, setPassword] = useState('pass123');
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,19 +32,7 @@ export const LoginPage: React.FC = () => {
         vehicle_id: res.vehicle_id,
       });
 
-      const role = res.role;
-      const token = res.access_token;
-
-      const host = window.location.hostname;
-      if (role === 'store_manager') {
-        window.location.href = `http://${host}:3001/?token=${token}`;
-      } else if (role === 'driver') {
-        window.location.href = `http://${host}:3002/#/driver?token=${token}`;
-      } else if (role === 'loader') {
-        window.location.href = `http://${host}:3002/#/loader?token=${token}`;
-      } else {
-        navigate('/');
-      }
+      navigate('/');
     } catch (err: any) {
       setError(err);
     } finally {
@@ -83,7 +71,7 @@ export const LoginPage: React.FC = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-xs focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm"
-              placeholder="dispatcher@waypoint.com"
+              placeholder="dispatcher@waypoint.test"
             />
           </div>
 
@@ -113,13 +101,11 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-6 pt-6 border-t border-slate-100 text-slate-500 text-xs space-y-1">
-          <div className="font-semibold text-slate-700 mb-1">Available System Logins:</div>
-          <div>• <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">dispatcher@waypoint.com</code></div>
-          <div>• <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">driver@waypoint.com</code></div>
-          <div>• <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">loader@waypoint.com</code></div>
-          <div>• <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-800">storemanager@waypoint.com</code></div>
-          <div className="text-[11px] text-slate-400 mt-2">Password for all: <code className="font-mono text-slate-600">pass123</code></div>
+        <div className="mt-6 pt-6 border-t border-slate-100 text-center text-xs text-slate-400">
+          Headline dispatcher account:{' '}
+          <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono">
+            dispatcher@waypoint.test
+          </code>
         </div>
       </div>
     </div>

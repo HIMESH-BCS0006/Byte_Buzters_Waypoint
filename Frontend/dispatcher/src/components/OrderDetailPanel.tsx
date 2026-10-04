@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCancelOrder } from '../api/generated/store-manager/store-manager';
+import {
+  useCancelOrder,
+  useGetOrderById,
+} from '../api/generated/store-manager/store-manager';
 import { useRequeueOrder } from '../api/generated/dispatcher/dispatcher';
 import type { Order, Outlet } from '../api/generated/models';
 import { OrderStatus } from '../api/generated/models';
 import { StatusBadge } from './StatusBadge';
 import { ErrorState } from './ErrorState';
+import { LoadingState } from './LoadingState';
 import { DeferralHistory } from './DeferralHistory';
 import { ApiError } from '../api/http';
 import { formatColomboDateTime } from '../lib/time';
@@ -31,6 +35,14 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
   onCancelOrder,
 }) => {
   const queryClient = useQueryClient();
+
+  // Fetch full order detail (includes deferral_history once backend adds it)
+  const {
+    data: detail,
+    isLoading: loadingDetail,
+    isError: errorDetail,
+    error: detailError,
+  } = useGetOrderById({ id: order.id });
 
   // Cancel state
   const [showCancelForm, setShowCancelForm] = useState(false);
@@ -84,7 +96,7 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
     requeueMutation.mutate({ id: order.id });
   };
 
-  const displayOrder = order;
+  const displayOrder = detail ?? order;
 
   return (
     <div className="h-full flex flex-col bg-white border-l border-slate-200 overflow-hidden">
@@ -106,6 +118,11 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        {loadingDetail && <LoadingState message="Loading order details…" />}
+        {errorDetail && detailError && (
+          <ErrorState error={detailError} />
+        )}
+
         {/* Outlet info */}
         {outlet && (
           <section>
@@ -205,11 +222,12 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
           </div>
         </section>
 
-        {/* Deferral history */}
+        {/* Deferral history – will be populated once backend adds deferral_history to Order GET response */}
         <section>
           <h3 className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide mb-2">
             Deferral History
           </h3>
+          {/* TODO: backend to add deferral_history: Deferral[] to GET /orders/{id} response */}
           <DeferralHistory deferrals={(displayOrder as any).deferral_history ?? []} />
         </section>
 
@@ -307,6 +325,7 @@ export const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({
             </div>
           )}
 
+          {/* Inform non-actionable states */}
           {!CANCELLABLE_STATUSES.includes(displayOrder.status) &&
             displayOrder.status !== OrderStatus.DEFERRED && (
               <p className="text-xs text-slate-400 italic">

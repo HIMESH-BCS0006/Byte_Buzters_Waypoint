@@ -21,13 +21,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = urlParams.get('token');
-    if (tokenFromUrl) {
-      localStorage.setItem('token', tokenFromUrl);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return tokenFromUrl;
-    }
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   });
   const [user, setUser] = useState<User | null>(null);

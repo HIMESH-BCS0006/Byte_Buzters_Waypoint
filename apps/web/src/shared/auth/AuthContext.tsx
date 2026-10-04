@@ -71,14 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     async function loadUser() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tokenFromUrl = urlParams.get('token');
-      if (tokenFromUrl) {
-        setAuthToken(tokenFromUrl);
-        setTokenState(tokenFromUrl);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-
       const existingToken = getAuthToken();
       if (existingToken) {
         try {

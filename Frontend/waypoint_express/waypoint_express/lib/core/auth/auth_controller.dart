@@ -26,13 +26,7 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> restoreSession() async {
     state = state.copyWith(isLoading: true, isInitial: true, clearError: true);
     try {
-      String? token = Uri.base.queryParameters['token'];
-      if (token != null && token.isNotEmpty) {
-        await _tokenStorage.saveToken(token);
-      } else {
-        token = await _tokenStorage.getToken();
-      }
-
+      final token = await _tokenStorage.getToken();
       if (token == null || token.isEmpty) {
         state = state.copyWith(isLoading: false, isInitial: false, clearUser: true);
         return;
@@ -42,6 +36,17 @@ class AuthController extends StateNotifier<AuthState> {
       AppConfig.mockExample = await _tokenStorage.getMockExample();
       final response = await _apiClient.get('/me');
       final user = User.fromJson(Map<String, dynamic>.from(response.data as Map));
+
+      if (user.role != Role.driver && user.role != Role.loader ) {
+        await _tokenStorage.clearToken();
+        state = state.copyWith(
+          isLoading: false,
+          isInitial: false,
+          clearUser: true,
+          errorMessage: 'This app is for drivers and loaders only.',
+        );
+        return;
+      }
 
       // Determine active depot for loader
       String? activeDepot = await _tokenStorage.getActiveDepot();
@@ -93,6 +98,14 @@ class AuthController extends StateNotifier<AuthState> {
 
       final loginResponse = _parseLoginResponse(response.data);
       final user = loginResponse.user;
+
+      if (user.role != Role.driver && user.role != Role.loader) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: 'This app is for drivers and loaders only.',
+        );
+        return false;
+      }
 
       await _tokenStorage.saveToken(loginResponse.accessToken);
 
