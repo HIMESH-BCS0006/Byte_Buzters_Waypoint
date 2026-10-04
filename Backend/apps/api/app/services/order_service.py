@@ -25,6 +25,7 @@ from app.models.domain import (
     SyncOp,
     Trip,
     TripStop,
+    User,
 )
 from app.schemas.field import (
     RecordReceiptRequest,
@@ -138,6 +139,8 @@ def enrich_order_response(order: Order, db: Session) -> OrderResponse:
     stop_id = stop.id if stop else None
     eta = stop.eta if stop else None
 
+    receipt_status = stop.receipt_status if stop else None
+
     return OrderResponse(
         id=order.id,
         outlet_id=order.outlet_id,
@@ -155,6 +158,7 @@ def enrich_order_response(order: Order, db: Session) -> OrderResponse:
         trip_id=trip_id,
         stop_id=stop_id,
         eta=eta,
+        receipt_status=receipt_status,
         note=order.note,
         client_op_id=order.client_op_id,
     )
@@ -224,11 +228,13 @@ def create_order(db: Session, req: CreateOrderRequest, user_id: str) -> CreateOr
 
     # Record sync op if client_op_id was provided
     if req.client_op_id:
+        db_user = db.query(User).filter((User.id == user_id) | (User.username == user_id)).first()
+        valid_user_id = db_user.id if db_user else user_id
         db.add(SyncOp(
             client_op_id=req.client_op_id,
             device_id="web",
             client_seq=1,
-            user_id=user_id,
+            user_id=valid_user_id,
             op_type="create_order",
             payload={"order_id": order_id},
             client_ts=now_dt,
@@ -389,13 +395,73 @@ def requeue_order(db: Session, order_id: str) -> OrderResponse:
     if not order:
         raise AppException(code="ORDER_NOT_FOUND", message=f"Order {order_id} not found", status_code=404)
 
-    if order.status != "DEFERRED":
+    if order.status not in ("DEFERRED", "SUBMITTED"):
         raise InvalidTransitionException(f"Cannot requeue order in status {order.status}; must be DEFERRED")
 
+    now = business_now()
     order.status = "SUBMITTED"
+
+    # Mark the latest deferral record resolved
+    latest_def = (
+        db.query(Deferral)
+        .filter_by(order_id=order.id)
+        .order_by(Deferral.decided_at.desc())
+        .first()
+    )
+    if latest_def:
+        latest_def.resolved_at = now
+        latest_def.resolved_to_date = order.delivery_date
+
     db.commit()
     db.refresh(order)
+
+    emit_event(
+        db=db,
+        event_type="order.requeued",
+        payload={"order_id": order.id, "outlet_id": order.outlet_id, "delivery_date": str(order.delivery_date)},
+        audience_role="dispatcher",
+        audience_scope=None,
+        notification_message=f"Order {order.id} was re-queued for next plan generation",
+    )
+    db.commit()
+
     return enrich_order_response(order, db)
+
+
+def batch_requeue_orders(db: Session, order_ids: List[str]) -> List[OrderResponse]:
+    results = []
+    now = business_now()
+    for order_id in order_ids:
+        order = db.query(Order).filter_by(id=order_id).first()
+        if order and order.status in ("DEFERRED", "SUBMITTED"):
+            order.status = "SUBMITTED"
+            latest_def = (
+                db.query(Deferral)
+                .filter_by(order_id=order.id)
+                .order_by(Deferral.decided_at.desc())
+                .first()
+            )
+            if latest_def:
+                latest_def.resolved_at = now
+                latest_def.resolved_to_date = order.delivery_date
+            db.flush()
+            results.append(enrich_order_response(order, db))
+
+    db.commit()
+
+    if results:
+        emit_event(
+            db=db,
+            event_type="order.requeued",
+            payload={"count": len(results), "order_ids": [r.id for r in results]},
+            audience_role="dispatcher",
+            audience_scope=None,
+            notification_message=f"{len(results)} orders re-queued for next plan generation",
+        )
+        db.commit()
+
+    return results
+
 
 
 def get_outlet_expected_deliveries(db: Session, outlet_id: str) -> List[TripStop]:
@@ -420,6 +486,8 @@ def record_stop_receipt_service(
 ) -> ReceiptResponse:
     stop = db.query(TripStop).filter_by(id=stop_id).first()
     if not stop:
+        stop = db.query(TripStop).filter_by(order_id=stop_id).first()
+    if not stop:
         raise AppException(code="STOP_NOT_FOUND", message=f"Stop {stop_id} not found", status_code=404)
 
     order = db.query(Order).filter_by(id=stop.order_id).first()
@@ -438,13 +506,44 @@ def record_stop_receipt_service(
     )
     db.add(rcp)
     stop.receipt_status = "CONFIRMED" if req.outcome == "full" else "DISCREPANCY"
+    stop.status = "DELIVERED" if req.outcome == "full" else "PARTIAL"
+    stop.outcome = "delivered" if req.outcome == "full" else "partial"
+    stop.completed_at = now_dt
+
+    if order:
+        order.status = "DELIVERED" if req.outcome == "full" else "PARTIALLY_DELIVERED"
+        st = db.query(OutletServiceState).filter_by(outlet_id=order.outlet_id).first()
+        if not st:
+            st = OutletServiceState(
+                outlet_id=order.outlet_id,
+                last_served_date=now_dt.date(),
+                consecutive_deferrals=0,
+            )
+            db.add(st)
+        else:
+            st.last_served_date = now_dt.date()
+            st.consecutive_deferrals = 0
+
+    trip = db.query(Trip).filter_by(id=stop.trip_id).first()
+    if trip:
+        all_stops = db.query(TripStop).filter_by(trip_id=trip.id).all()
+        all_done = all(
+            s.status in ["DELIVERED", "PARTIAL", "FAILED", "SKIPPED"]
+            or s.receipt_status in ["CONFIRMED", "DISCREPANCY"]
+            or s.id == stop.id
+            for s in all_stops
+        )
+        if all_done:
+            trip.status = "COMPLETED"
 
     if req.client_op_id:
+        db_user = db.query(User).filter((User.id == user_id) | (User.username == user_id)).first()
+        valid_user_id = db_user.id if db_user else user_id
         db.add(SyncOp(
             client_op_id=req.client_op_id,
             device_id="store_web",
             client_seq=1,
-            user_id=user_id,
+            user_id=valid_user_id,
             op_type="record_receipt",
             payload={"stop_id": stop.id, "outcome": req.outcome},
             client_ts=now_dt,
@@ -457,13 +556,66 @@ def record_stop_receipt_service(
     db.commit()
     db.refresh(rcp)
 
+    # Emit events to dispatcher, driver, and store manager
     emit_event(
         db,
         event_type="receipt.confirmed",
-        payload={"receipt_id": rcp.id, "stop_id": stop.id, "outcome": req.outcome},
+        payload={
+            "receipt_id": rcp.id,
+            "stop_id": stop.id,
+            "order_id": stop.order_id,
+            "trip_id": stop.trip_id,
+            "outcome": req.outcome,
+        },
         audience_role="dispatcher",
-        audience_scope=None,
-        notification_message=f"Receipt confirmed ({req.outcome}) for stop {stop.id}",
+        audience_scope=trip.depot_id if trip else None,
+        notification_message=f"Receipt confirmed ({req.outcome}) for order {stop.order_id}",
     )
+    if order:
+        emit_event(
+            db,
+            event_type="order.delivered",
+            payload={
+                "order_id": order.id,
+                "stop_id": stop.id,
+                "trip_id": stop.trip_id,
+                "status": order.status,
+            },
+            audience_role="store_manager",
+            audience_scope=order.outlet_id,
+            notification_message=f"Order {order.id} has been delivered and confirmed.",
+        )
+    emit_event(
+        db,
+        event_type="receipt.confirmed",
+        payload={
+            "receipt_id": rcp.id,
+            "stop_id": stop.id,
+            "order_id": stop.order_id,
+            "outcome": req.outcome,
+        },
+        audience_role="driver",
+        audience_scope=trip.vehicle_id if trip else None,
+        notification_message=f"Receipt confirmed by store manager for stop {stop.id}",
+    )
+    if trip and trip.status == "COMPLETED":
+        emit_event(
+            db,
+            event_type="trip.completed",
+            payload={"trip_id": trip.id, "vehicle_id": trip.vehicle_id, "depot_id": trip.depot_id},
+            audience_role="dispatcher",
+            audience_scope=trip.depot_id,
+            notification_message=f"Trip {trip.id} completed: all deliveries finished.",
+        )
+        emit_event(
+            db,
+            event_type="trip.completed",
+            payload={"trip_id": trip.id, "vehicle_id": trip.vehicle_id},
+            audience_role="driver",
+            audience_scope=trip.vehicle_id,
+            notification_message=f"Trip {trip.id} completed. Return to depot.",
+        )
+    db.commit()
 
     return ReceiptResponse.model_validate(rcp)
+

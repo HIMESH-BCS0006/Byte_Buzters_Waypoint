@@ -18,11 +18,11 @@ interface StatusBadgeProps {
 }
 
 const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
-  SUBMITTED: { bg: 'bg-blue-100 border-blue-200', text: 'text-blue-800', label: 'Submitted' },
-  PLANNED: { bg: 'bg-indigo-100 border-indigo-200', text: 'text-indigo-800', label: 'Planned' },
+  SUBMITTED: { bg: 'bg-blue-100 border-blue-200', text: 'text-blue-800', label: 'Received' },
+  PLANNED: { bg: 'bg-sky-100 border-sky-200', text: 'text-sky-800', label: 'Scheduled' },
   SCHEDULED: { bg: 'bg-sky-100 border-sky-200', text: 'text-sky-800', label: 'Scheduled' },
   LOADED: { bg: 'bg-teal-100 border-teal-200', text: 'text-teal-800', label: 'Loaded' },
-  IN_TRANSIT: { bg: 'bg-purple-100 border-purple-200', text: 'text-purple-800', label: 'In Transit' },
+  IN_TRANSIT: { bg: 'bg-purple-100 border-purple-200', text: 'text-purple-800', label: 'On the way' },
   DELIVERED: { bg: 'bg-emerald-100 border-emerald-200', text: 'text-emerald-800', label: 'Delivered' },
   PARTIALLY_DELIVERED: { bg: 'bg-amber-100 border-amber-200', text: 'text-amber-800', label: 'Partially Delivered' },
   DEFERRED: { bg: 'bg-orange-100 border-orange-200', text: 'text-orange-800', label: 'Deferred' },

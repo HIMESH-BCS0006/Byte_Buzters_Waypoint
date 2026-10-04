@@ -198,8 +198,9 @@ def report_load_check_service(
     )
     db.add(lc)
 
-    # Set trip status to BLOCKED on shortfall
-    trip.status = "BLOCKED"
+    # Keep trip in LOADING status (do not block vehicle/trip confirmation)
+    if trip.status in ["CONFIRMED", "BLOCKED"]:
+        trip.status = "LOADING"
     db.commit()
     db.refresh(lc)
     db.refresh(trip)
@@ -245,11 +246,38 @@ def resolve_load_check_service(
 
     now_dt = business_now()
 
-    if req.resolution == "defer_order":
+    if req.resolution in ("cancel_order", "reject_load"):
+        if order:
+            order.status = "CANCELLED"
+            order.cancel_reason = f"Warehouse Shortfall ({lc.issue})"
+            if req.note:
+                order.note = f"{order.note or ''}\nCancel Note: {req.note}".strip()
+
+            # Emit notification to Store Manager
+            emit_event(
+                db,
+                event_type="order.cancelled",
+                payload={"order_id": order.id, "reason": order.cancel_reason, "note": req.note},
+                audience_role="store_manager",
+                audience_scope=order.outlet_id,
+                message=f"Order {order.id} cancelled in loading bay due to {lc.issue} stock. {req.note or ''}".strip(),
+            )
+
+        # Remove stop from trip so truck can depart
+        stop = db.query(TripStop).filter_by(trip_id=trip.id, order_id=lc.order_id).first() if trip else None
+        if stop:
+            db.delete(stop)
+            remaining = db.query(TripStop).filter_by(trip_id=trip.id).filter(TripStop.id != stop.id).order_by(TripStop.seq.asc()).all()
+            for idx, s in enumerate(remaining, start=1):
+                s.seq = idx
+
+        if trip:
+            trip.plan_version += 1
+
+    elif req.resolution in ("defer_order", "accept_shortfall", "reassign_stock"):
         if order:
             order.status = "DEFERRED"
             order.deferral_count += 1
-            # Create Deferral record
             def_id = f"DEF-{uuid.uuid4().hex[:8].upper()}"
             deferral = Deferral(
                 id=def_id,
@@ -265,7 +293,6 @@ def resolve_load_check_service(
             )
             db.add(deferral)
 
-            # Update outlet service state
             oss = db.query(OutletServiceState).filter_by(outlet_id=order.outlet_id).first()
             if not oss:
                 oss = OutletServiceState(outlet_id=order.outlet_id, consecutive_deferrals=1, last_deferred_date=now_dt.date())
@@ -274,11 +301,18 @@ def resolve_load_check_service(
                 oss.last_deferred_date = now_dt.date()
                 oss.consecutive_deferrals += 1
 
-        # Remove stop from trip
+            emit_event(
+                db,
+                event_type="order.deferred",
+                payload={"order_id": order.id, "reason": lc.issue, "note": req.note},
+                audience_role="store_manager",
+                audience_scope=order.outlet_id,
+                message=f"Order {order.id} deferred during loading: {lc.issue} stock. {req.note or ''}".strip(),
+            )
+
         stop = db.query(TripStop).filter_by(trip_id=trip.id, order_id=lc.order_id).first() if trip else None
         if stop:
             db.delete(stop)
-            # Renumber remaining stops
             remaining = db.query(TripStop).filter_by(trip_id=trip.id).filter(TripStop.id != stop.id).order_by(TripStop.seq.asc()).all()
             for idx, s in enumerate(remaining, start=1):
                 s.seq = idx
@@ -305,11 +339,8 @@ def resolve_load_check_service(
         if trip:
             trip.plan_version += 1
 
-    # Check if any remaining load checks are open for this trip
-    if trip:
-        open_checks = db.query(LoadCheck).filter_by(trip_id=trip.id, status="OPEN").filter(LoadCheck.id != lc.id).count()
-        if open_checks == 0:
-            trip.status = "LOADING"
+    if trip and trip.status == "BLOCKED":
+        trip.status = "LOADING"
 
     db.commit()
     db.refresh(lc)
@@ -346,12 +377,7 @@ def confirm_trip_load_service(
             f"Cannot confirm load: plan version mismatch (request: {req.plan_version}, current: {trip.plan_version})"
         )
 
-    # Check for open shortfalls
-    open_checks = db.query(LoadCheck).filter_by(trip_id=trip.id, status="OPEN").count()
-    if open_checks > 0 or trip.status == "BLOCKED":
-        raise InvalidTransitionException("Cannot confirm load while trip is BLOCKED with open shortfalls")
-
-    if trip.status not in ["LOADING", "CONFIRMED", "LOADED"]:
+    if trip.status not in ["LOADING", "CONFIRMED", "LOADED", "BLOCKED"]:
         raise InvalidTransitionException(f"Cannot confirm load for trip in status '{trip.status}'")
 
     trip.status = "LOADED"
@@ -361,6 +387,14 @@ def confirm_trip_load_service(
         ord_obj = db.query(Order).filter_by(id=s.order_id).first()
         if ord_obj and ord_obj.status in ["SCHEDULED", "PLANNED"]:
             ord_obj.status = "LOADED"
+            emit_event(
+                db,
+                event_type="order.loaded",
+                payload={"order_id": ord_obj.id, "trip_id": trip.id, "status": "LOADED"},
+                audience_role="store_manager",
+                audience_scope=ord_obj.outlet_id,
+                message=f"Order {ord_obj.id} has been loaded for delivery",
+            )
 
     db.commit()
     db.refresh(trip)

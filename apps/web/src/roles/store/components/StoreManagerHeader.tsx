@@ -3,10 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { useAuth } from '../../../shared/auth/AuthContext';
 import { useBusinessClock } from '../../../shared/hooks/useBusinessClock';
-import { Store, User, Clock, AlertCircle } from 'lucide-react';
+import { Store, User, Clock, AlertCircle, LogOut } from 'lucide-react';
 
 export const StoreManagerHeader: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { formattedClockDate, formattedClockTime, demoMode } = useBusinessClock();
 
   const { data: outlets } = useQuery({
@@ -46,7 +46,7 @@ export const StoreManagerHeader: React.FC = () => {
         </div>
       </div>
 
-      {/* Business Clock & Demo Badge */}
+      {/* Business Clock & Demo Badge & Logout */}
       <div className="flex items-center gap-3">
         <div className="hidden sm:flex flex-col items-end text-xs">
           <div className="flex items-center gap-1 font-medium text-brand-100">
@@ -62,6 +62,15 @@ export const StoreManagerHeader: React.FC = () => {
             DEMO
           </span>
         )}
+
+        <button
+          onClick={logout}
+          title="Sign out or switch store"
+          className="flex items-center gap-1 rounded-lg border border-brand-700 bg-brand-800/80 px-2.5 py-1.5 text-xs font-semibold text-brand-200 hover:bg-brand-700 hover:text-white transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden md:inline">Switch Store</span>
+        </button>
       </div>
     </header>
   );

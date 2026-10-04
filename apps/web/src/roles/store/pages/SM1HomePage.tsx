@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle, Bell, CalendarX, CheckCircle2, Clock, ClipboardList, ExternalLink,
-  FileText, Package, PlusCircle, ShoppingCart, Snowflake, Truck, Crosshair,
+  FileText, Package, PlusCircle, ShoppingCart, Snowflake, Truck, Crosshair, QrCode,
 } from 'lucide-react';
 import { useAuth } from '../../../shared/auth/AuthContext';
 import { LoadingState } from '../../../shared/components/LoadingState';
@@ -239,7 +239,7 @@ export const OrderListItem: React.FC<{ order: Order }> = ({ order }) => {
     : done
       ? { label: 'Confirm / view receipt', to: `/store/orders/${order.id}/receipt`, icon: <FileText className="h-3.5 w-3.5" /> }
       : order.status === 'IN_TRANSIT'
-        ? { label: 'Track delivery', to: `/store/orders/${order.id}`, icon: <Crosshair className="h-3.5 w-3.5" /> }
+        ? { label: 'Receive / Scan QR', to: `/store/orders/${order.id}/receipt`, icon: <QrCode className="h-3.5 w-3.5" /> }
         : { label: 'View details', to: `/store/orders/${order.id}`, icon: <ExternalLink className="h-3.5 w-3.5" /> };
 
   return (

@@ -313,10 +313,63 @@ def list_deferrals_service(db: Session, depot_id: Optional[str] = None) -> List[
         )
         query = query.filter(Deferral.order_id.in_(orders))
     deferrals = query.order_by(Deferral.decided_at.desc()).all()
-    return [DeferralResponse.model_validate(d) for d in deferrals]
+
+    order_ids = [d.order_id for d in deferrals]
+    orders_map = {o.id: o for o in db.query(Order).filter(Order.id.in_(order_ids)).all()} if order_ids else {}
+    outlet_ids = [o.outlet_id for o in orders_map.values()]
+    outlets_map = {ot.id: ot for ot in db.query(Outlet).filter(Outlet.id.in_(outlet_ids)).all()} if outlet_ids else {}
+
+    results = []
+    for d in deferrals:
+        resp = DeferralResponse.model_validate(d)
+        ord_obj = orders_map.get(d.order_id)
+        if ord_obj:
+            resp.order_status = ord_obj.status
+            resp.outlet_id = ord_obj.outlet_id
+            resp.temp_requirement = ord_obj.temp_requirement
+            resp.order_units = ord_obj.order_units
+            resp.order_weight_kg = ord_obj.order_weight_kg
+            resp.order_volume_m3 = ord_obj.order_volume_m3
+            resp.deferral_count = ord_obj.deferral_count
+            resp.is_requeued = (ord_obj.status == "SUBMITTED")
+
+            ot = outlets_map.get(ord_obj.outlet_id)
+            if ot:
+                resp.brand = ot.brand
+                resp.district = ot.district
+        else:
+            resp.order_status = "UNKNOWN"
+            resp.is_requeued = False
+        results.append(resp)
+
+    return results
 
 
 def get_outlet_skip_history_service(db: Session, outlet_id: str) -> List[DeferralResponse]:
     orders = db.query(Order.id).filter_by(outlet_id=outlet_id).subquery()
     deferrals = db.query(Deferral).filter(Deferral.order_id.in_(orders)).order_by(Deferral.decided_at.desc()).all()
-    return [DeferralResponse.model_validate(d) for d in deferrals]
+
+    order_ids = [d.order_id for d in deferrals]
+    orders_map = {o.id: o for o in db.query(Order).filter(Order.id.in_(order_ids)).all()} if order_ids else {}
+    outlet = db.query(Outlet).filter_by(id=outlet_id).first()
+
+    results = []
+    for d in deferrals:
+        resp = DeferralResponse.model_validate(d)
+        ord_obj = orders_map.get(d.order_id)
+        if ord_obj:
+            resp.order_status = ord_obj.status
+            resp.outlet_id = ord_obj.outlet_id
+            resp.temp_requirement = ord_obj.temp_requirement
+            resp.order_units = ord_obj.order_units
+            resp.order_weight_kg = ord_obj.order_weight_kg
+            resp.order_volume_m3 = ord_obj.order_volume_m3
+            resp.deferral_count = ord_obj.deferral_count
+            resp.is_requeued = (ord_obj.status == "SUBMITTED")
+        if outlet:
+            resp.brand = outlet.brand
+            resp.district = outlet.district
+        results.append(resp)
+
+    return results
+

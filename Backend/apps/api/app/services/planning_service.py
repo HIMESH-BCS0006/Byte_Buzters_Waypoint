@@ -205,14 +205,14 @@ def generate_plan_service(
         for fl in fuel_records
     ]
 
-    # 5. Fetch SUBMITTED and DEFERRED Orders for this depot and delivery date
+    # 5. Fetch SUBMITTED Orders for this depot and delivery date (including re-queued orders)
     submitted_orders = (
         db.query(Order)
         .join(Outlet, Order.outlet_id == Outlet.id)
         .filter(
             Outlet.depot_id == depot_id,
             Order.delivery_date == delivery_date,
-            Order.status.in_(["SUBMITTED", "DEFERRED"]),
+            Order.status == "SUBMITTED",
         )
         .all()
     )
@@ -222,6 +222,7 @@ def generate_plan_service(
         for so in submitted_orders:
             db.query(Deferral).filter_by(order_id=so.id, from_delivery_date=delivery_date).delete()
         db.flush()
+
 
     # Fetch outlet service states for priority history
     service_states = {
@@ -793,6 +794,14 @@ def confirm_trip_service(db: Session, trip_id: str, user_id: str) -> TripDetailR
         ord_obj = db.query(Order).filter_by(id=s.order_id).first()
         if ord_obj:
             ord_obj.status = "SCHEDULED"
+            emit_event(
+                db=db,
+                event_type="order.scheduled",
+                payload={"order_id": ord_obj.id, "trip_id": trip.id, "status": "SCHEDULED"},
+                audience_role="store_manager",
+                audience_scope=ord_obj.outlet_id,
+                notification_message=f"Order {ord_obj.id} has been scheduled on trip {trip.id}",
+            )
 
     db.commit()
     db.refresh(trip)
@@ -1118,7 +1127,8 @@ def get_fleet_availability_service(
 
 
 def get_dispatch_queue_service(db: Session, depot_id: Optional[str] = None) -> List[Order]:
-    query = db.query(Order).filter(Order.status.in_(["SUBMITTED", "DEFERRED"]))
+    query = db.query(Order)
     if depot_id:
         query = query.join(Outlet, Order.outlet_id == Outlet.id).filter(Outlet.depot_id == depot_id)
     return query.order_by(Order.delivery_date.asc(), Order.placed_at.asc()).all()
+

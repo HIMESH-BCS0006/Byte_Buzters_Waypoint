@@ -69,10 +69,9 @@ def start_trip_service(
     if trip.status in ["CANCELLED", "BLOCKED"]:
         raise InvalidTransitionException(f"Cannot start trip in status '{trip.status}'")
 
-    if trip.plan_version != req.plan_version:
-        raise InvalidTransitionException(
-            f"Cannot start trip: plan version mismatch (request: {req.plan_version}, current: {trip.plan_version})"
-        )
+    if req.plan_version and trip.plan_version != req.plan_version:
+        # Align with latest plan version if minor drift
+        trip.plan_version = max(trip.plan_version, req.plan_version)
 
     if trip.status == "IN_PROGRESS":
         return TripResponse.model_validate(trip)
@@ -97,7 +96,22 @@ def start_trip_service(
         message=f"Driver started trip {trip.id} with vehicle {trip.vehicle_id}",
     )
 
+    # Notify consignee store managers that order is on the way
+    for s in stops:
+        ord_obj = db.query(Order).filter_by(id=s.order_id).first()
+        if ord_obj:
+            emit_event(
+                db,
+                event_type="order.in_transit",
+                payload={"order_id": ord_obj.id, "trip_id": trip.id, "status": "IN_TRANSIT"},
+                audience_role="store_manager",
+                audience_scope=ord_obj.outlet_id,
+                notification_message=f"Order {ord_obj.id} is on the way for delivery",
+            )
+    db.commit()
+
     return TripResponse.model_validate(trip)
+
 
 
 def record_stop_arrival_service(

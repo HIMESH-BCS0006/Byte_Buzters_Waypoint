@@ -28,27 +28,46 @@ class _DriverTrackScreenState extends ConsumerState<DriverTrackScreen> {
   String? _summaryWarning;
   String? _updatingStopId;
   StreamSubscription<Map<String, dynamic>>? _receiptSubscription;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadTracking();
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _pollRefresh();
+    });
     _receiptSubscription = ref
         .read(driverApiProvider)
         .watchReceiptEvents()
         .listen(
           _handleReceiptEvent,
-          onError: (Object error) {
-            if (!mounted) return;
-            _showActionError('Receipt updates disconnected', error);
-          },
+          onError: (_) {},
         );
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _receiptSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _pollRefresh() async {
+    if (!mounted) return;
+    try {
+      final handoffApi = ref.read(orderHandoffApiProvider);
+      await handoffApi.syncAllTripsFromServer(driverId: _driverId);
+      final results = await Future.wait([
+        handoffApi.getCachedTripHandoffs(driverId: _driverId),
+        handoffApi.getDriverTrackingStops(driverId: _driverId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _scannedTrips = results[0] as List<TripHandoff>;
+        _receivedOrders = results[1] as List<DriverTrackedStop>;
+      });
+    } catch (_) {}
   }
 
   Future<void> _handleReceiptEvent(Map<String, dynamic> event) async {
@@ -474,10 +493,13 @@ class _DriverTrackScreenState extends ConsumerState<DriverTrackScreen> {
     final orders = _ordersForHandoff(handoff);
     final stopCount = handoff.orders.length;
     final completedStops = _completedStops(orders);
+    final isAllCompleted = stopCount > 0 && completedStops == stopCount;
     final progress = stopCount == 0
         ? 0.0
         : (completedStops / stopCount).clamp(0.0, 1.0);
-    final status = _statusForTrip(handoff.tripId) ?? handoff.status;
+    final status = isAllCompleted
+        ? TripStatus.completed
+        : (_statusForTrip(handoff.tripId) ?? handoff.status);
     final districts = handoff.orders.map((order) => order.district).toSet();
     final route = districts.isEmpty
         ? handoff.depotId
@@ -573,6 +595,8 @@ class _DriverTrackScreenState extends ConsumerState<DriverTrackScreen> {
     final completedStops = _completedStops(orders);
     final displayedStops = orders.isEmpty ? trip.stopCount : orders.length;
     final expectedStops = displayedStops;
+    final isAllCompleted = expectedStops > 0 && completedStops == expectedStops;
+    final tripStatus = isAllCompleted ? TripStatus.completed : trip.status;
     final progress = expectedStops == 0
         ? 0.0
         : (completedStops / expectedStops).clamp(0.0, 1.0);
@@ -602,7 +626,7 @@ class _DriverTrackScreenState extends ConsumerState<DriverTrackScreen> {
                     ),
                   ),
                 ),
-                _TripStatusBadge(status: trip.status),
+                _TripStatusBadge(status: tripStatus),
               ],
             ),
             const SizedBox(height: 4),

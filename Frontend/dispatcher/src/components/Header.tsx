@@ -15,7 +15,7 @@ export const Header: React.FC = () => {
     logout,
   } = useAuth();
 
-  const { demoMode, businessNow } = useBusinessNow();
+  const { businessNow } = useBusinessNow();
   const { connectionStatus } = useLiveEvents();
 
   const getStatusBadge = () => {
@@ -28,12 +28,7 @@ export const Header: React.FC = () => {
           </span>
         );
       case 'polling':
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-            <span className="w-2 h-2 bg-amber-500 rounded-full mr-1.5" />
-            Polling (15s)
-          </span>
-        );
+        return null;
       case 'disconnected':
       default:
         return (
@@ -84,12 +79,6 @@ export const Header: React.FC = () => {
         {/* Connection Status */}
         {getStatusBadge()}
 
-        {/* Demo Mode Badge */}
-        {demoMode && (
-          <span className="bg-purple-900 text-purple-200 border border-purple-700 text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-            Demo Mode
-          </span>
-        )}
       </div>
 
       <div className="flex items-center space-x-4">

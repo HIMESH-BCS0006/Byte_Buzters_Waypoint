@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import require_roles, check_depot_scope
 from app.models.domain import PlanRun
 from app.schemas.order import (
+    BatchRequeueRequest,
     DeferOrderRequest,
     DeferralResponse,
     OrderResponse,
@@ -37,6 +38,7 @@ from app.schemas.field import (
     ResolveLoadCheckRequest,
 )
 from app.services.order_service import (
+    batch_requeue_orders,
     defer_order_manually,
     enrich_order_response,
     requeue_order,
@@ -110,7 +112,7 @@ def generate_plan_endpoint(
     db: Session = Depends(get_db),
 ):
     check_depot_scope(req.depot_id, claims)
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return generate_plan_service(db, req, user_id=user_id)
 
 
@@ -203,7 +205,7 @@ def defer_order_endpoint(
     claims: dict = Depends(require_roles(["dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return defer_order_manually(db, order_id=id, req=req, user_id=user_id)
 
 
@@ -221,6 +223,33 @@ def requeue_order_endpoint(
 
 
 @router.post(
+    "/orders/batch-requeue",
+    response_model=List[OrderResponse],
+    operation_id="batchRequeueOrders",
+)
+def batch_requeue_orders_endpoint(
+    req: BatchRequeueRequest,
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    return batch_requeue_orders(db, order_ids=req.order_ids)
+
+
+@router.post(
+    "/deferrals/requeue",
+    response_model=List[OrderResponse],
+    operation_id="requeueDeferrals",
+)
+def requeue_deferrals_endpoint(
+    req: BatchRequeueRequest,
+    claims: dict = Depends(require_roles(["dispatcher"])),
+    db: Session = Depends(get_db),
+):
+    return batch_requeue_orders(db, order_ids=req.order_ids)
+
+
+
+@router.post(
     "/trips/{id}/confirm",
     response_model=TripDetailResponse,
     operation_id="confirmTrip",
@@ -230,7 +259,7 @@ def confirm_trip_endpoint(
     claims: dict = Depends(require_roles(["dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return confirm_trip_service(db, trip_id=id, user_id=user_id)
 
 
@@ -258,7 +287,7 @@ def close_plan_run_endpoint(
     db: Session = Depends(get_db),
 ):
     target_depot = check_depot_scope(depot_id, claims)
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return close_plan_run_service(db, depot_id=target_depot, user_id=user_id)
 
 
@@ -344,7 +373,7 @@ def resolve_exception_decision_endpoint(
     claims: dict = Depends(require_roles(["dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return resolve_exception_decision_service(db, exception_id=id, req=req, user_id=user_id)
 
 
@@ -374,7 +403,7 @@ def resolve_load_check_endpoint(
     claims: dict = Depends(require_roles(["dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "dispatcher")
+    user_id = claims.get("user_id") or claims.get("sub", "dispatcher")
     return resolve_load_check_service(db, load_check_id=id, req=req, user_id=user_id)
 
 

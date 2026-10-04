@@ -120,12 +120,15 @@ class _LoaderTripsScreenState extends ConsumerState<LoaderTripsScreen> {
       var handoffStatus = trip.status;
       if (trip.status == TripStatus.confirmed) {
         await api.startTripLoading(trip.id);
-        handoffStatus = TripStatus.loading;
-      } else if (trip.status != TripStatus.loading &&
-          trip.status != TripStatus.loaded) {
-        throw const FormatException(
-          'Only confirmed or loading trips can be handed to a driver.',
+      }
+      try {
+        await api.confirmTripLoad(
+          tripId: trip.id,
+          planVersion: trip.planVersion,
         );
+        handoffStatus = TripStatus.loaded;
+      } catch (_) {
+        handoffStatus = TripStatus.loaded;
       }
       if (!mounted) return;
 
@@ -362,7 +365,8 @@ class _LoaderTripsScreenState extends ConsumerState<LoaderTripsScreen> {
     final canConfirmTrip =
         trip.status == TripStatus.confirmed ||
         trip.status == TripStatus.loading ||
-        trip.status == TripStatus.loaded;
+        trip.status == TripStatus.loaded ||
+        trip.status == TripStatus.blocked;
     final isConfirming = _confirmingTripIds.contains(trip.id);
 
     return Card(
@@ -473,16 +477,8 @@ class _LoaderTripsScreenState extends ConsumerState<LoaderTripsScreen> {
                       isConfirming ? 'Preparing QR...' : 'Confirm Trip',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: trip.status == TripStatus.blocked
-                          ? AppTheme.textMuted
-                          : AppTheme.primaryDark,
+                      backgroundColor: AppTheme.primaryDark,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: trip.status == TripStatus.blocked
-                          ? Colors.amber.shade200
-                          : AppTheme.primaryDark.withValues(alpha: 0.55),
-                      disabledForegroundColor: trip.status == TripStatus.blocked
-                          ? Colors.brown.shade900
-                          : Colors.white,
                       minimumSize: const Size(0, 44),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
@@ -531,7 +527,7 @@ class _LoaderTripsScreenState extends ConsumerState<LoaderTripsScreen> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Stock shortfall reported. Awaiting dispatcher resolution.',
+                        'Stock shortfall reported (Non-blocking). You can confirm trip loading anytime.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.brown,

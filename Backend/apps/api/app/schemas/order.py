@@ -39,6 +39,7 @@ class OrderResponse(BaseModel):
     trip_id: Optional[str] = None
     stop_id: Optional[str] = None
     eta: Optional[str] = None
+    receipt_status: Optional[str] = None
     note: Optional[str] = None
     client_op_id: Optional[str] = None
 
@@ -67,6 +68,12 @@ class DeferOrderRequest(BaseModel):
     reason_code: Optional[str] = "MANUAL"
 
 
+class BatchRequeueRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    order_ids: list[str]
+
+
 class DeferralResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -84,3 +91,16 @@ class DeferralResponse(BaseModel):
     notified_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     resolved_to_date: Optional[date] = None
+
+    # Enriched context fields
+    order_status: Optional[str] = "DEFERRED"
+    outlet_id: Optional[str] = None
+    brand: Optional[str] = None
+    district: Optional[str] = None
+    temp_requirement: Optional[str] = None
+    order_units: Optional[int] = None
+    order_weight_kg: Optional[float] = None
+    order_volume_m3: Optional[float] = None
+    deferral_count: Optional[int] = 0
+    is_requeued: Optional[bool] = False
+

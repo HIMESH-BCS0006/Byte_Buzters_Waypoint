@@ -336,7 +336,151 @@ export const PlanningPage: React.FC = () => {
           </div>
         )}
 
-        {/* Trips Section with View Filter Tabs */}
+        {/* Unassigned orders section with Auto-Allocate option (TOP of the page) */}
+        <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                Unassigned Orders ({(unplannedOrders ?? []).length})
+              </h2>
+              {selectedOrders.length > 0 && (
+                <span className="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
+                  {selectedOrders.length} selected
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {chilledSuggestion && (
+                <span className="text-xs text-blue-700 font-medium bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
+                  {chilledSuggestion}
+                </span>
+              )}
+
+              {(unplannedOrders ?? []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleAutoAllocate}
+                  disabled={generatePlanMutation.isPending}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all disabled:opacity-50"
+                  title="Run optimization engine to automatically allocate unassigned orders"
+                >
+                  {generatePlanMutation.isPending ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Optimizing Allocation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                      <span>
+                        {selectedOrders.length > 0
+                          ? `Auto-Allocate Selected (${selectedOrders.length})`
+                          : 'Auto-Allocate All Unassigned'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {unplannedLoading ? (
+            <p className="text-xs text-slate-500">Loading unassigned orders...</p>
+          ) : (unplannedOrders ?? []).length === 0 ? (
+            <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+              <svg className="w-8 h-8 text-emerald-500 mx-auto mb-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <p className="text-xs font-semibold text-slate-700">All submitted orders are assigned to trips.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">No pending or unassigned orders for {deliveryDate}.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto pt-1">
+              {unplannedOrders?.map((o) => {
+                const isSelected = selectedOrders.includes(o.id);
+                const outlet = outletsById[o.outlet_id];
+                return (
+                  <div
+                    key={o.id}
+                    onClick={() => toggleOrderSelection(o.id)}
+                    className={`flex flex-col justify-between p-3.5 border rounded-xl text-xs cursor-pointer transition-all shadow-sm ${
+                      isSelected
+                        ? 'border-brand-500 bg-brand-50/70 ring-2 ring-brand-500/20 text-brand-900'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/80 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            checked={isSelected}
+                            onChange={() => {}} // toggled by parent div
+                          />
+                          <span className="font-mono font-bold text-slate-900">{o.id}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {o.deferral_count > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300" title="Re-queued order with aging priority">
+                              Re-queued • Def #{o.deferral_count}
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              o.temp_requirement === 'chilled'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}
+                          >
+                            {o.temp_requirement}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 space-y-0.5">
+                        <div className="font-semibold text-slate-800 truncate">
+                          {outlet ? `${outlet.outlet_id} – ${outlet.brand}` : `Outlet ${o.outlet_id}`}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                          <span>{outlet?.district ?? '–'}</span>
+                          <span>•</span>
+                          <span>
+                            {o.order_units} units ({o.order_weight_kg}kg)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 font-mono">{o.delivery_date}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleAutoAllocateOrder(o.id, e)}
+                        disabled={generatePlanMutation.isPending}
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-md transition-colors"
+                        title="Auto-allocate this order to optimal trip"
+                      >
+                        <svg className="w-3 h-3 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        <span>Auto Allocate</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Trips Section with View Filter Tabs (BELOW unassigned orders) */}
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center space-x-2">
@@ -670,143 +814,6 @@ export const PlanningPage: React.FC = () => {
                           );
                         })
                       )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Unassigned orders section with Auto-Allocate option */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div className="flex items-center space-x-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                Unassigned Orders ({(unplannedOrders ?? []).length})
-              </h2>
-              {selectedOrders.length > 0 && (
-                <span className="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
-                  {selectedOrders.length} selected
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {chilledSuggestion && (
-                <span className="text-xs text-blue-700 font-medium bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
-                  {chilledSuggestion}
-                </span>
-              )}
-
-              {(unplannedOrders ?? []).length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleAutoAllocate}
-                  disabled={generatePlanMutation.isPending}
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all disabled:opacity-50"
-                  title="Run optimization engine to automatically allocate unassigned orders"
-                >
-                  {generatePlanMutation.isPending ? (
-                    <>
-                      <svg className="w-3.5 h-3.5 animate-spin mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      <span>Optimizing Allocation...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                      </svg>
-                      <span>
-                        {selectedOrders.length > 0
-                          ? `Auto-Allocate Selected (${selectedOrders.length})`
-                          : 'Auto-Allocate All Unassigned'}
-                      </span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {unplannedLoading ? (
-            <p className="text-xs text-slate-500">Loading unassigned orders...</p>
-          ) : (unplannedOrders ?? []).length === 0 ? (
-            <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
-              <svg className="w-8 h-8 text-emerald-500 mx-auto mb-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <p className="text-xs font-semibold text-slate-700">All submitted orders are assigned to trips.</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">No pending or unassigned orders for {deliveryDate}.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto pt-1">
-              {unplannedOrders?.map((o) => {
-                const isSelected = selectedOrders.includes(o.id);
-                const outlet = outletsById[o.outlet_id];
-                return (
-                  <div
-                    key={o.id}
-                    onClick={() => toggleOrderSelection(o.id)}
-                    className={`flex flex-col justify-between p-3.5 border rounded-xl text-xs cursor-pointer transition-all shadow-sm ${
-                      isSelected
-                        ? 'border-brand-500 bg-brand-50/70 ring-2 ring-brand-500/20 text-brand-900'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/80 bg-white text-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            checked={isSelected}
-                            onChange={() => {}} // toggled by parent div
-                          />
-                          <span className="font-mono font-bold text-slate-900">{o.id}</span>
-                        </div>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            o.temp_requirement === 'chilled'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
-                          }`}
-                        >
-                          {o.temp_requirement}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 space-y-0.5">
-                        <div className="font-semibold text-slate-800 truncate">
-                          {outlet ? `${outlet.outlet_id} – ${outlet.brand}` : `Outlet ${o.outlet_id}`}
-                        </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                          <span>{outlet?.district ?? '–'}</span>
-                          <span>•</span>
-                          <span>
-                            {o.order_units} units ({o.order_weight_kg}kg)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-400 font-mono">{o.delivery_date}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => handleAutoAllocateOrder(o.id, e)}
-                        disabled={generatePlanMutation.isPending}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-md transition-colors"
-                        title="Auto-allocate this order to optimal trip"
-                      >
-                        <svg className="w-3 h-3 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                        </svg>
-                        <span>Auto Allocate</span>
-                      </button>
                     </div>
                   </div>
                 );

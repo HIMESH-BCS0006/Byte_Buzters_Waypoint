@@ -136,7 +136,7 @@ def sync_offline_operations_endpoint(
     claims: dict = Depends(require_roles(["driver", "dispatcher", "loader", "store_manager"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", claims.get("user_id", "driver"))
+    user_id = claims.get("user_id") or claims.get("sub", "driver")
     vehicle_id = claims.get("vehicle_id")
     role = claims.get("role", "driver")
     return sync_offline_operations_service(db, req=req, user_id=user_id, user_vehicle_id=vehicle_id, user_role=role)

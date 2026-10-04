@@ -19,6 +19,7 @@ import {
   Truck,
   MapPin,
   Radio,
+  QrCode,
 } from 'lucide-react';
 import { useOrder } from '../api/hooks';
 import { LoadingState } from '../../../shared/components/LoadingState';
@@ -112,7 +113,7 @@ export const SM4TrackingPage: React.FC = () => {
    *    a "already confirmed" state).
    *  - TODO if the API is extended to include receipt_status on Order, read it here.
    */
-  const showReceiptLink = isDelivered && order.stop_id;
+  const showReceiptLink = isDelivered || ['LOADED', 'IN_TRANSIT'].includes(order.status);
   const statusLabel = order.status.replace(/_/g, ' ');
   const deliveryLabel = isDelivered
     ? 'Delivery completed'
@@ -368,7 +369,32 @@ export const SM4TrackingPage: React.FC = () => {
         </section>
       )}
 
-      {/* 5. Confirm receipt link (SM5) */}
+      {/* 5. Driver arrival handover & Confirm receipt link (SM5) */}
+      {['LOADED', 'IN_TRANSIT'].includes(order.status) && (
+        <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#12665a] text-white shadow-sm">
+                <QrCode className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-950">Driver Arrival &amp; Handover</p>
+                <p className="text-xs text-emerald-800">
+                  When the driver arrives at your store, scan their Handover QR code to verify goods and mark the order as Delivered.
+                </p>
+              </div>
+            </div>
+            <Link
+              to={`/store/orders/${order.id}/receipt`}
+              data-testid="scan-handover-qr-btn"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#12665a] px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-[#0e4e45] transition-colors"
+            >
+              <QrCode className="h-4 w-4" /> Scan Driver QR &amp; Confirm Receipt
+            </Link>
+          </div>
+        </section>
+      )}
+
       {showReceiptLink && (
         <Link
           to={`/store/orders/${order.id}/receipt`}
@@ -376,7 +402,7 @@ export const SM4TrackingPage: React.FC = () => {
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
         >
           <ClipboardCheck className="h-5 w-5" />
-          Confirm Goods Receipt
+          {isDelivered ? 'View Receipt Details' : 'Confirm Goods Receipt & Scan Handover QR'}
         </Link>
       )}
 

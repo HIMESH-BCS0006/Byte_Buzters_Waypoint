@@ -17,6 +17,7 @@ from app.models.domain import (
     SyncOp,
     Trip,
     TripStop,
+    User,
 )
 from app.schemas.field import (
     CreateLoadCheckRequest,
@@ -235,11 +236,13 @@ def sync_offline_operations_service(
             reason_msg = str(e)
 
         # 4. Save SyncOp record
+        db_user = db.query(User).filter((User.id == user_id) | (User.username == user_id)).first()
+        valid_user_id = db_user.id if db_user else user_id
         sync_record = SyncOp(
             client_op_id=op.client_op_id,
             device_id=op.device_id,
             client_seq=op.client_seq,
-            user_id=user_id,
+            user_id=valid_user_id,
             op_type=op.op_type,
             payload=op.payload,
             client_ts=op.client_ts,
