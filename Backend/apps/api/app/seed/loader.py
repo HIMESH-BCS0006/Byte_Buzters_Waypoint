@@ -257,35 +257,77 @@ def seed_reference_data(db: Session, force: bool = False) -> Dict[str, int]:
     # 9. Seed Users (60 drivers, 120 store managers, 4 headline accounts)
     pwd_hash = hash_password(SEED_PASSWORD)
 
-    # 4 Headline Accounts
+    # Headline Accounts (.com and .test)
     headline_accounts = [
+        {
+            "id": "dispatcher@waypoint.com",
+            "username": "dispatcher@waypoint.com",
+            "role": "dispatcher",
+            "display_name": "Dispatcher",
+            "depot_access": ["Peliyagoda", "Kandy"],
+        },
         {
             "id": "dispatcher@waypoint.test",
             "username": "dispatcher@waypoint.test",
             "role": "dispatcher",
-            "display_name": "Dispatcher (Peliyagoda & Kandy)",
+            "display_name": "Dispatcher",
+            "depot_access": ["Peliyagoda", "Kandy"],
+        },
+        {
+            "id": "loader@waypoint.com",
+            "username": "loader@waypoint.com",
+            "role": "loader",
+            "display_name": "Loader",
             "depot_access": ["Peliyagoda", "Kandy"],
         },
         {
             "id": "loader@waypoint.test",
             "username": "loader@waypoint.test",
             "role": "loader",
-            "display_name": "Loader (Peliyagoda & Kandy)",
+            "display_name": "Loader",
             "depot_access": ["Peliyagoda", "Kandy"],
+        },
+        {
+            "id": "driver@waypoint.com",
+            "username": "driver@waypoint.com",
+            "role": "driver",
+            "vehicle_id": "VEH001",
+            "display_name": "Driver (VEH001)",
         },
         {
             "id": "driver@waypoint.test",
             "username": "driver@waypoint.test",
             "role": "driver",
             "vehicle_id": "VEH001",
-            "display_name": "Headline Driver (VEH001)",
+            "display_name": "Driver (VEH001)",
+        },
+        {
+            "id": "storemanager@waypoint.com",
+            "username": "storemanager@waypoint.com",
+            "role": "store_manager",
+            "outlet_id": "OUT004",
+            "display_name": "Store Manager (OUT004)",
+        },
+        {
+            "id": "store_manager@waypoint.com",
+            "username": "store_manager@waypoint.com",
+            "role": "store_manager",
+            "outlet_id": "OUT004",
+            "display_name": "Store Manager (OUT004)",
+        },
+        {
+            "id": "store@waypoint.com",
+            "username": "store@waypoint.com",
+            "role": "store_manager",
+            "outlet_id": "OUT004",
+            "display_name": "Store Manager (OUT004)",
         },
         {
             "id": "store@waypoint.test",
             "username": "store@waypoint.test",
             "role": "store_manager",
             "outlet_id": "OUT004",
-            "display_name": "Headline Store Manager (OUT004)",
+            "display_name": "Store Manager (OUT004)",
         },
     ]
 
