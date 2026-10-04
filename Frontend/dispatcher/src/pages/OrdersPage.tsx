@@ -102,7 +102,7 @@ export const OrdersPage: React.FC = () => {
     isError,
     error,
     refetch,
-  } = useGetDispatchQueue();
+  } = useGetDispatchQueue(selectedDepot ? { depot_id: selectedDepot } : undefined);
 
   const { outletsById, isLoading: loadingOutlets } = useOutletMap();
 

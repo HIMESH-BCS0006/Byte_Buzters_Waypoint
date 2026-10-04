@@ -337,10 +337,20 @@ class WalkthroughRunner:
         # ----------------------------------------------------------------------
         # Step 9: Store Manager Goods Receipt
         # ----------------------------------------------------------------------
+        stop_outlet = remaining_stop.get("outlet_id")
+        target_sm_headers = sm_headers
+        if stop_outlet and stop_outlet != store_oid:
+            r_sm_login = self.client.post(f"{self.base_url}/auth/login", json={
+                "username": f"store_{stop_outlet.lower()}@waypoint.test",
+                "password": "pass123",
+            })
+            if r_sm_login.status_code == 200:
+                target_sm_headers = {"Authorization": f"Bearer {r_sm_login.json()['access_token']}"}
+
         r_rec = self.client.post(f"{self.base_url}/stops/{stop_id}/receipt", json={
             "outcome": "full",
             "note": "Goods received in excellent condition",
-        }, headers=sm_headers)
+        }, headers=target_sm_headers)
         rec_data = r_rec.json()
 
         step9_ok = r_rec.status_code == 200 and rec_data["outcome"] == "full"

@@ -1,9 +1,13 @@
 import React from 'react';
 import { useGetDispatchQueue } from '../api/generated/dispatcher/dispatcher';
+import { useAuth } from '../context/AuthContext';
 import { getStatusColor } from '../lib/utils';
 
 export const DispatchQueuePage: React.FC = () => {
-  const { data: queue, isLoading, isError, error } = useGetDispatchQueue();
+  const { selectedDepot } = useAuth();
+  const { data: queue, isLoading, isError, error } = useGetDispatchQueue(
+    selectedDepot ? { depot_id: selectedDepot } : undefined
+  );
 
   return (
     <div className="space-y-6">
@@ -11,13 +15,13 @@ export const DispatchQueuePage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dispatch Queue</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Orders pending allocation for the upcoming operating run.
+            Orders pending allocation for the upcoming operating run ({selectedDepot}).
           </p>
         </div>
         <div className="text-right">
           <span className="text-xs text-gray-500 font-medium">Cutoff Rule:</span>
           <span className="ml-2 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded text-xs font-semibold">
-            16:00 Colombo Time
+            14:00 Colombo Time (D11)
           </span>
         </div>
       </div>
@@ -27,7 +31,7 @@ export const DispatchQueuePage: React.FC = () => {
           <div className="p-8 text-center text-gray-500">Loading order queue...</div>
         ) : isError ? (
           <div className="p-8 text-center text-red-600">
-            Failed to load queue. {(error as any)?.message || 'Check mock server.'}
+            Failed to load queue. {(error as any)?.message || 'Check backend connection.'}
           </div>
         ) : !queue || queue.length === 0 ? (
           <div className="p-8 text-center text-gray-500">

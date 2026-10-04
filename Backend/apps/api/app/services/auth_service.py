@@ -44,6 +44,7 @@ def login_user(db: Session, username: str, password: str) -> TokenResponse:
         access_token=token,
         token_type="bearer",
         user_id=user.id,
+        id=user.id,
         username=user.username,
         role=user.role,
         display_name=user.display_name,
@@ -56,6 +57,7 @@ def build_user_me_response(db: Session, claims: dict) -> UserMeResponse:
     """Builds UserMeResponse from JWT claims and DB user info."""
     return UserMeResponse(
         user_id=claims["user_id"],
+        id=claims["user_id"],
         username=claims["sub"],
         role=claims["role"],
         display_name=claims.get("display_name", claims["sub"]),
@@ -63,3 +65,4 @@ def build_user_me_response(db: Session, claims: dict) -> UserMeResponse:
         outlet_id=claims.get("outlet_id"),
         vehicle_id=claims.get("vehicle_id")
     )
+
