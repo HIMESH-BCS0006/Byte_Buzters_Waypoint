@@ -112,19 +112,14 @@ def require_roles(allowed_roles: List[str]):
 def check_depot_scope(depot_id: Optional[str], claims: dict) -> str:
     """
     Enforces D24 depot scope rules:
-    - Defaults if user has 1 depot.
-    - 422 VALIDATION_ERROR if missing when user has multiple depots.
+    - Defaults to first depot if user has access and none is provided.
     - 403 FORBIDDEN_SCOPE if depot is outside user's access list.
     """
     user_depots = claims.get("depot_ids") or []
     
     if not depot_id:
-        if len(user_depots) == 1:
+        if len(user_depots) >= 1:
             return user_depots[0]
-        elif len(user_depots) > 1:
-            raise ValidationException(
-                message="Query parameter 'depot_id' is required when user has access to multiple depots"
-            )
         else:
             raise ForbiddenScopeException(message="User has no assigned depot access")
             
