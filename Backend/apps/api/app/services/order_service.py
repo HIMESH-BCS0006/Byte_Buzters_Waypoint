@@ -286,13 +286,16 @@ def cancel_order(db: Session, order_id: str, req: CancelOrderRequest, outlet_id:
     if not order:
         raise AppException(code="ORDER_NOT_FOUND", message=f"Order {order_id} not found", status_code=404)
 
-    if order.status not in ("SUBMITTED", "PLANNED", "SCHEDULED"):
+    if order.status not in ("SUBMITTED", "PLANNED", "SCHEDULED", "DEFERRED"):
         raise InvalidTransitionException(f"Cannot cancel order in state {order.status}")
 
     # Remove from trip stop if planned/scheduled
     stop = db.query(TripStop).filter_by(order_id=order.id).first()
     if stop:
         db.delete(stop)
+
+    # Clean up deferral record if deferred
+    db.query(Deferral).filter_by(order_id=order.id).delete()
 
     order.status = "CANCELLED"
     order.cancel_reason = req.reason
@@ -301,13 +304,17 @@ def cancel_order(db: Session, order_id: str, req: CancelOrderRequest, outlet_id:
     db.commit()
     db.refresh(order)
 
+    notif_msg = f"Order {order.id} cancelled: {req.reason}"
+    if req.note:
+        notif_msg += f" - Note: {req.note}"
+
     emit_event(
         db=db,
         event_type="order.cancelled",
-        payload={"order_id": order.id, "reason": req.reason},
+        payload={"order_id": order.id, "reason": req.reason, "note": req.note},
         audience_role="store_manager",
         audience_scope=order.outlet_id,
-        notification_message=f"Order {order.id} cancelled: {req.reason}",
+        notification_message=notif_msg,
     )
     db.commit()
 

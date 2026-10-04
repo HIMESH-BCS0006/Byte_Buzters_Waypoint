@@ -257,12 +257,16 @@ class WalkthroughRunner:
         # Use driver token for that vehicle
         custom_driver_headers = driver_headers
 
-        r_start = self.client.post(f"{self.base_url}/trips/{trip_id}/start", json={
-            "plan_version": current_version,
-        }, headers=custom_driver_headers)
+        # Fetch remaining stops and select store manager's stop or any available stop
+        trip_entry = next((t for t in r_updated_trips.json() if t["trip"]["id"] == trip_id and len(t["stops"]) > 0), None)
+        if not trip_entry:
+            trip_entry = next(t for t in r_updated_trips.json() if len(t["stops"]) > 0)
+            trip_id = trip_entry["trip"]["id"]
+            current_version = trip_entry["trip"]["plan_version"]
 
-        # Fetch remaining stops and select store manager's stop
-        r_stops_detail = next(t["stops"] for t in r_updated_trips.json() if t["trip"]["id"] == trip_id)
+        r_start = self.client.post(f"{self.base_url}/trips/{trip_id}/start", json={"plan_version": current_version}, headers=custom_driver_headers)
+
+        r_stops_detail = trip_entry["stops"]
         remaining_stop = next((s for s in r_stops_detail if s.get("order_id") == placed_order_id or s.get("outlet_id") == store_oid), r_stops_detail[0])
         stop_id = remaining_stop["id"]
 
@@ -337,10 +341,20 @@ class WalkthroughRunner:
         # ----------------------------------------------------------------------
         # Step 9: Store Manager Goods Receipt
         # ----------------------------------------------------------------------
+        stop_outlet = remaining_stop.get("outlet_id")
+        target_sm_headers = sm_headers
+        if stop_outlet and stop_outlet != store_oid:
+            r_sm_login = self.client.post(f"{self.base_url}/auth/login", json={
+                "username": f"store_{stop_outlet.lower()}@waypoint.test",
+                "password": "pass123",
+            })
+            if r_sm_login.status_code == 200:
+                target_sm_headers = {"Authorization": f"Bearer {r_sm_login.json()['access_token']}"}
+
         r_rec = self.client.post(f"{self.base_url}/stops/{stop_id}/receipt", json={
             "outcome": "full",
             "note": "Goods received in excellent condition",
-        }, headers=sm_headers)
+        }, headers=target_sm_headers)
         rec_data = r_rec.json()
 
         step9_ok = r_rec.status_code == 200 and rec_data["outcome"] == "full"

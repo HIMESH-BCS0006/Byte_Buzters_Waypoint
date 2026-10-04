@@ -39,5 +39,29 @@ services:
     command: >
       sh -c "alembic upgrade head && python -m app.seed.loader && python -m app.seed.day_generator && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
+  dispatcher:
+    build:
+      context: ./Frontend/dispatcher
+      dockerfile: Dockerfile
+    container_name: waypoint_dispatcher
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+  store_manager:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: waypoint_store_manager
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
+
+

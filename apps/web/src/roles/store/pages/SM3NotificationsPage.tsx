@@ -5,21 +5,23 @@ import { LoadingState } from '../../../shared/components/LoadingState';
 import { ErrorState } from '../../../shared/components/ErrorState';
 
 function noticeData(notification: any) {
-  const data = notification.data ?? notification.details ?? {};
+  const data = notification.data ?? notification.details ?? notification.payload ?? {};
   const eventType = notification.type ?? notification.event_type ?? data.type ?? notification.event_id ?? 'notice';
-  const reason = notification.reason_text ?? notification.reason ?? data.reason_text ?? data.reason;
+  const reason = notification.message ?? notification.reason_text ?? notification.reason ?? data.reason_text ?? data.reason;
   const reasonClass = notification.reason_class ?? data.reason_class;
   const consequence = notification.consequence_text ?? data.consequence_text ?? data.consequence;
   const expectedDate = notification.resolved_to_date ?? notification.new_expected_date ?? data.resolved_to_date ?? data.new_expected_date ?? data.delivery_date;
-  const isDeferral = String(eventType).toLowerCase().includes('defer') || Boolean(reason || reasonClass);
-  const isEtaChange = String(eventType).toLowerCase().includes('eta') || String(eventType).toLowerCase().includes('retry');
+  const isCancelled = String(eventType).toLowerCase().includes('cancel') || String(notification.message).toLowerCase().includes('cancel');
+  const isDeferral = !isCancelled && (String(eventType).toLowerCase().includes('defer') || Boolean(notification.reason_text || reasonClass));
+  const isEtaChange = !isCancelled && (String(eventType).toLowerCase().includes('eta') || String(eventType).toLowerCase().includes('retry'));
 
   return {
-    title: isDeferral ? 'Delivery date changed' : isEtaChange ? 'Delivery ETA updated' : 'Store delivery notice',
-    reason: reason || (isEtaChange ? 'The delivery plan was updated after a retry.' : 'A new update is available for this store order.'),
+    title: isCancelled ? 'Order Cancelled by Dispatcher' : isDeferral ? 'Delivery date changed' : isEtaChange ? 'Delivery ETA updated' : 'Store delivery notice',
+    reason: notification.message || reason || (isEtaChange ? 'The delivery plan was updated after a retry.' : 'A new update is available for this store order.'),
     reasonClass: reasonClass || (isDeferral ? 'Operational notice' : undefined),
     consequence,
     expectedDate,
+    isCancelled,
     isDeferral,
     isEtaChange,
   };
@@ -55,13 +57,20 @@ export const SM3NotificationsPage: React.FC = () => {
             {notices.map((notification: any) => {
               const notice = noticeData(notification);
               const unread = !notification.read_at;
-              const Icon = notice.isDeferral ? AlertTriangle : notice.isEtaChange ? CalendarClock : Info;
+              const Icon = notice.isCancelled ? AlertTriangle : notice.isDeferral ? AlertTriangle : notice.isEtaChange ? CalendarClock : Info;
               return (
-                <article key={notification.id} onClick={() => openNotice(notification)} className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors ${unread ? 'border-amber-200 bg-amber-50/60 hover:bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                <article key={notification.id} onClick={() => openNotice(notification)} className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors ${notice.isCancelled ? 'border-rose-200 bg-rose-50/50 hover:bg-rose-50' : unread ? 'border-amber-200 bg-amber-50/60 hover:bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
                   <div className="flex items-start gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${unread ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}><Icon className="h-5 w-5" /></div>
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${notice.isCancelled ? 'bg-rose-100 text-rose-700' : unread ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}><Icon className="h-5 w-5" /></div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-slate-900">{notice.title}</h2>{unread && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">Unread</span>}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-bold text-slate-900">{notice.title}</h2>
+                        {notice.isCancelled ? (
+                          <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-900">Cancelled</span>
+                        ) : unread ? (
+                          <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">Unread</span>
+                        ) : null}
+                      </div>
                       <p className="mt-2 text-sm text-slate-700">{notice.reason}</p>
                       {notice.reasonClass && <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Reason class: {notice.reasonClass}</p>}
                       {notice.consequence && <p className="mt-2 rounded-lg bg-white/80 px-3 py-2 text-xs text-slate-700"><span className="font-bold">Consequence: </span>{notice.consequence}</p>}
