@@ -45,7 +45,7 @@ def create_order_endpoint(
     claims: dict = Depends(require_roles(["store_manager"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "store_manager")
+    user_id = claims.get("user_id") or claims.get("sub", "store_manager")
     return create_order(db, req, user_id=user_id)
 
 
@@ -116,7 +116,7 @@ def record_stop_receipt_endpoint(
     claims: dict = Depends(require_roles(["store_manager", "dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "store_manager")
+    user_id = claims.get("user_id") or claims.get("sub", "store_manager")
     outlet_id = claims.get("outlet_id")
     role = claims.get("role", "store_manager")
     return record_stop_receipt_service(

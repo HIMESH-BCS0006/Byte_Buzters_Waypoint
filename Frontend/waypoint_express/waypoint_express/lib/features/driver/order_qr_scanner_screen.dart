@@ -41,6 +41,14 @@ class _OrderQrScannerScreenState extends ConsumerState<OrderQrScannerScreen> {
       final driverId = auth.user?.id ?? auth.user?.username ?? 'driver';
       if (rawValue.startsWith(TripHandoff.qrPrefix)) {
         final tripHandoff = TripHandoff.fromQrPayload(rawValue);
+        try {
+          await ref.read(driverApiProvider).startTrip(
+                tripId: tripHandoff.tripId,
+                planVersion: 1,
+              );
+        } catch (_) {
+          // Continue if already started or minor drift
+        }
         await ref.read(orderHandoffApiProvider).cacheTripHandoffForTracking(
               handoff: tripHandoff,
               driverId: driverId,
@@ -184,8 +192,10 @@ class DriverTripHandoffScreen extends ConsumerStatefulWidget {
 
 class _DriverTripHandoffScreenState
     extends ConsumerState<DriverTripHandoffScreen> {
+  late TripHandoff _currentHandoff;
   final Set<String> _completedOrderIds = {};
   StreamSubscription<Map<String, dynamic>>? _receiptSubscription;
+  Timer? _pollTimer;
 
   String get _driverId {
     final user = ref.read(authControllerProvider).user;
@@ -195,32 +205,51 @@ class _DriverTripHandoffScreenState
   @override
   void initState() {
     super.initState();
+    _currentHandoff = widget.handoff;
     _completedOrderIds.addAll(
-      widget.handoff.orders
+      _currentHandoff.orders
           .where(_hasConfirmedReceipt)
           .map((order) => order.orderId),
     );
+
+    _syncFromServer();
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _syncFromServer();
+    });
+
     _receiptSubscription =
         ref.read(driverApiProvider).watchReceiptEvents().listen(
       _handleReceiptEvent,
-      onError: (Object error) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Receipt updates disconnected: '
-              '${error.toString().replaceFirst('Exception: ', '')}',
-            ),
-          ),
-        );
-      },
+      onError: (_) {},
     );
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _receiptSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _syncFromServer() async {
+    final updated = await ref
+        .read(orderHandoffApiProvider)
+        .syncTripHandoffFromServer(
+          tripId: _currentHandoff.tripId,
+          driverId: _driverId,
+        );
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() {
+        _currentHandoff = updated;
+        _completedOrderIds.addAll(
+          updated.orders
+              .where(_hasConfirmedReceipt)
+              .map((order) => order.orderId),
+        );
+      });
+    }
   }
 
   Future<void> _handleReceiptEvent(Map<String, dynamic> event) async {
@@ -230,53 +259,168 @@ class _DriverTripHandoffScreenState
               event: event,
             );
     final tripOrderIds =
-        widget.handoff.orders.map((order) => order.orderId).toSet();
+        _currentHandoff.orders.map((order) => order.orderId).toSet();
     final matchingOrderIds = completedOrderIds.intersection(tripOrderIds);
     if (matchingOrderIds.isEmpty || !mounted) return;
     setState(() => _completedOrderIds.addAll(matchingOrderIds));
+    _syncFromServer();
   }
 
   @override
   Widget build(BuildContext context) {
+    final totalOrders = _currentHandoff.orders.length;
+    final completedCount = _currentHandoff.orders
+        .where((order) =>
+            _completedOrderIds.contains(order.orderId) ||
+            _hasConfirmedReceipt(order))
+        .length;
+    final isTripCompleted = totalOrders > 0 && completedCount == totalOrders;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Trip Orders')),
+      appBar: AppBar(
+        title: const Text('Trip Orders'),
+        actions: [
+          if (isTripCompleted)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.successGreen, width: 1.5),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, color: AppTheme.successGreen, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'COMPLETED',
+                        style: TextStyle(
+                          color: AppTheme.successGreen,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryTeal, AppTheme.primaryDark],
+              gradient: LinearGradient(
+                colors: isTripCompleted
+                    ? [const Color(0xFF0F766E), const Color(0xFF064E3B)]
+                    : [AppTheme.primaryTeal, AppTheme.primaryDark],
               ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Trip ${widget.handoff.tripNo} • ${widget.handoff.vehicleId}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Trip ${_currentHandoff.tripNo} • ${_currentHandoff.vehicleId}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (isTripCompleted)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'COMPLETED',
+                          style: TextStyle(
+                            color: Color(0xFF064E3B),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '${widget.handoff.depotId} • ${widget.handoff.orders.length} assigned orders',
+                  '${_currentHandoff.depotId} • $completedCount / $totalOrders orders delivered',
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Loader: ${widget.handoff.loaderId}',
+                  'Loader: ${_currentHandoff.loaderId}',
                   style: const TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           ),
+          if (isTripCompleted) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.successGreen.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.successGreen, width: 1.5),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    color: AppTheme.successGreen,
+                    size: 26,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Trip Completed Successfully',
+                          style: TextStyle(
+                            color: AppTheme.successGreen,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'All store manager QR receipts have been scanned and verified.',
+                          style: TextStyle(
+                            color: Color(0xFF064E3B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
-          for (final order in widget.handoff.orders)
+          for (final order in _currentHandoff.orders)
             Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: Padding(
@@ -367,7 +511,7 @@ class _DriverTripHandoffScreenState
                         child: ElevatedButton.icon(
                           onPressed: () => _showOrderHandoverQr(
                             context,
-                            widget.handoff,
+                            _currentHandoff,
                             order,
                           ),
                           icon: const Icon(Icons.qr_code_2),
@@ -401,11 +545,11 @@ class _DriverTripHandoffScreenState
       order.receiptStatus == ReceiptStatus.confirmed ||
       order.receiptStatus == ReceiptStatus.discrepancy;
 
-  void _showOrderHandoverQr(
+  Future<void> _showOrderHandoverQr(
     BuildContext context,
     TripHandoff handoff,
     TripHandoffOrder order,
-  ) {
+  ) async {
     final payload = 'WAYPOINT-DRIVER-HANDOVER:${jsonEncode({
           'version': 1,
           'type': 'stop_handover',
@@ -421,28 +565,97 @@ class _DriverTripHandoffScreenState
           'ordered_units': order.units,
         })}';
 
-    Navigator.of(context).push<void>(
+    await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => _DriverOrderHandoverQrPage(
           payload: payload,
           title: 'Stop ${order.seq} Handover QR',
           subtitle: '${order.outletName} • ${order.orderId}',
+          tripId: handoff.tripId,
+          orderId: order.orderId,
+          stopId: order.stopId,
         ),
       ),
     );
+
+    if (mounted) {
+      await _syncFromServer();
+    }
   }
 }
 
-class _DriverOrderHandoverQrPage extends StatelessWidget {
+class _DriverOrderHandoverQrPage extends ConsumerStatefulWidget {
   final String payload;
   final String title;
   final String subtitle;
+  final String? tripId;
+  final String? orderId;
+  final String? stopId;
 
   const _DriverOrderHandoverQrPage({
     required this.payload,
     required this.title,
     required this.subtitle,
+    this.tripId,
+    this.orderId,
+    this.stopId,
   });
+
+  @override
+  ConsumerState<_DriverOrderHandoverQrPage> createState() =>
+      __DriverOrderHandoverQrPageState();
+}
+
+class __DriverOrderHandoverQrPageState
+    extends ConsumerState<_DriverOrderHandoverQrPage> {
+  bool _isConfirmed = false;
+  Timer? _checkTimer;
+
+  String get _driverId {
+    final user = ref.read(authControllerProvider).user;
+    return user?.id ?? user?.username ?? 'driver';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.tripId != null) {
+      _checkStatus();
+      _checkTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _checkStatus();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _checkTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkStatus() async {
+    if (_isConfirmed || widget.tripId == null) return;
+    final updated = await ref
+        .read(orderHandoffApiProvider)
+        .syncTripHandoffFromServer(
+          tripId: widget.tripId!,
+          driverId: _driverId,
+        );
+    if (!mounted || updated == null) return;
+    for (final o in updated.orders) {
+      if (o.orderId == widget.orderId || o.stopId == widget.stopId) {
+        if (o.receiptStatus == ReceiptStatus.confirmed ||
+            o.receiptStatus == ReceiptStatus.discrepancy) {
+          setState(() => _isConfirmed = true);
+          _checkTimer?.cancel();
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted) Navigator.of(context).pop();
+          });
+          break;
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +678,7 @@ class _DriverOrderHandoverQrPage extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            title,
+                            widget.title,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 20,
@@ -474,7 +687,7 @@ class _DriverOrderHandoverQrPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            subtitle,
+                            widget.subtitle,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: AppTheme.textSecondary,
@@ -482,32 +695,84 @@ class _DriverOrderHandoverQrPage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          Container(
-                            constraints: const BoxConstraints(maxWidth: 300),
-                            padding: const EdgeInsets.all(12),
-                            color: Colors.white,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) =>
-                                  SizedBox.square(
-                                dimension: constraints.maxWidth,
-                                child: QrImageView(
-                                  data: payload,
-                                  version: QrVersions.auto,
-                                  backgroundColor: Colors.white,
-                                  errorCorrectionLevel: QrErrorCorrectLevel.M,
+                          if (_isConfirmed) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: AppTheme.successGreen
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Column(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: AppTheme.successGreen,
+                                    size: 64,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Order Handover Verified!',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppTheme.successGreen,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Receipt confirmed by shop manager.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.successGreen,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Done'),
+                              ),
+                            ),
+                          ] else ...[
+                            Container(
+                              constraints: const BoxConstraints(maxWidth: 300),
+                              padding: const EdgeInsets.all(12),
+                              color: Colors.white,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) =>
+                                    SizedBox.square(
+                                  dimension: constraints.maxWidth,
+                                  child: QrImageView(
+                                    data: widget.payload,
+                                    version: QrVersions.auto,
+                                    backgroundColor: Colors.white,
+                                    errorCorrectionLevel: QrErrorCorrectLevel.M,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Show this order-specific code to the shop manager to identify the delivery and stop.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 13,
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Show this order-specific code to the shop manager to identify the delivery and stop.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),

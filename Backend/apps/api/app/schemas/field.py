@@ -50,7 +50,7 @@ class LoadCheckResponse(BaseModel):
 
 
 class ResolveLoadCheckRequest(BaseModel):
-    resolution: Literal["defer_order", "replan_order", "proceed_partial"]
+    resolution: str
     note: Optional[str] = None
 
 

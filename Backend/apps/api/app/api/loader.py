@@ -50,7 +50,7 @@ def get_loading_trips_endpoint(
 )
 def get_trip_load_list_endpoint(
     id: str,
-    claims: dict = Depends(require_roles(["loader", "dispatcher"])),
+    claims: dict = Depends(require_roles(["loader", "dispatcher", "driver"])),
     db: Session = Depends(get_db),
 ):
     return get_trip_load_list_service(db, trip_id=id)
@@ -66,7 +66,7 @@ def start_trip_loading_endpoint(
     claims: dict = Depends(require_roles(["loader", "dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "loader")
+    user_id = claims.get("user_id") or claims.get("sub", "loader")
     return start_trip_loading_service(db, trip_id=id, user_id=user_id)
 
 
@@ -82,7 +82,7 @@ def report_load_check_endpoint(
     claims: dict = Depends(require_roles(["loader", "dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "loader")
+    user_id = claims.get("user_id") or claims.get("sub", "loader")
     return report_load_check_service(db, trip_id=id, req=req, user_id=user_id)
 
 
@@ -97,5 +97,5 @@ def confirm_trip_load_endpoint(
     claims: dict = Depends(require_roles(["loader", "dispatcher"])),
     db: Session = Depends(get_db),
 ):
-    user_id = claims.get("sub", "loader")
+    user_id = claims.get("user_id") or claims.get("sub", "loader")
     return confirm_trip_load_service(db, trip_id=id, req=req, user_id=user_id)

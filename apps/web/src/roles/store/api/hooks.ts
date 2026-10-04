@@ -27,7 +27,8 @@ export function useOrders() {
   return useQuery<Order[]>({
     queryKey: ORDERS_QUERY_KEY,
     queryFn: () => apiClient.listOrders() as Promise<Order[]>,
-    staleTime: 15000,
+    staleTime: 3000,
+    refetchInterval: 4000,
   });
 }
 
@@ -38,6 +39,8 @@ export function useOrder(id: string | undefined) {
     queryKey: ['store-manager', 'orders', id],
     queryFn: () => apiClient.getOrderById(id!) as Promise<Order>,
     enabled: Boolean(id),
+    staleTime: 3000,
+    refetchInterval: 4000,
   });
 }
 

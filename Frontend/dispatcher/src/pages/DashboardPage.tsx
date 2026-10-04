@@ -73,7 +73,7 @@ export const DashboardPage: React.FC = () => {
     );
   };
 
-  const cutoffPassed = data.cutoff?.passed || (data.cutoff?.minutes_remaining ?? 0) <= 0;
+  //const cutoffPassed = data.cutoff?.passed || (data.cutoff?.minutes_remaining ?? 0) <= 0;
 
   return (
     <div className="space-y-4">
@@ -83,7 +83,7 @@ export const DashboardPage: React.FC = () => {
       />
 
       {/* Cutoff countdown */}
-      <div className="px-4 py-3 bg-white border border-slate-200 rounded-lg shadow-sm flex items-center justify-between">
+      {/* <div className="px-4 py-3 bg-white border border-slate-200 rounded-lg shadow-sm flex items-center justify-between">
         <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
           Order Cutoff Status
         </h3>
@@ -96,7 +96,7 @@ export const DashboardPage: React.FC = () => {
             {data.cutoff?.minutes_remaining} minute(s) remaining until 14:00 cutoff
           </span>
         )}
-      </div>
+      </div> */}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

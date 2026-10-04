@@ -23,18 +23,25 @@ export const LoadingPage: React.FC = () => {
 
   const resolveMutation = useResolveLoadCheck();
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
+  const [noteInput, setNoteInput] = useState<{ [id: string]: string }>({});
 
   const handleResolve = async (
     loadCheckId: string,
-    resolution: 'accept_shortfall' | 'reassign_stock' | 'reject_load'
+    resolution: string
   ) => {
     try {
+      const userNote = noteInput[loadCheckId]?.trim();
       await resolveMutation.mutateAsync({
         loadCheckId,
         resolution,
-        notes: `Resolved by dispatcher from loading console`,
+        notes: userNote || `Resolved by dispatcher from loading console`,
       });
-      setActiveMessage(`Load check #${loadCheckId} resolved with ${resolution}.`);
+      setActiveMessage(
+        resolution === 'cancel_order' || resolution === 'reject_load'
+          ? `Load check #${loadCheckId} resolved: Order cancelled and store manager notified.`
+          : `Load check #${loadCheckId} resolved with ${resolution}.`
+      );
+      setNoteInput((prev) => ({ ...prev, [loadCheckId]: '' }));
       refetch();
     } catch (err: any) {
       setActiveMessage(`Failed to resolve load check: ${err.message || 'Unknown error'}`);
@@ -117,13 +124,16 @@ export const LoadingPage: React.FC = () => {
             {(loadChecks ?? []).map((lc) => (
               <div
                 key={lc.id}
-                className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="py-4 flex flex-col md:flex-row md:items-start justify-between gap-4"
               >
-                <div>
+                <div className="space-y-1 max-w-md">
                   <div className="flex items-center space-x-2">
                     <span className="font-bold text-slate-800 text-sm">{`Check #${lc.id}`}</span>
                     <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">
                       Trip {lc.trip_id}
+                    </span>
+                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">
+                      Order {lc.order_id}
                     </span>
                     <span
                       className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
@@ -135,34 +145,45 @@ export const LoadingPage: React.FC = () => {
                       {lc.status}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Issue: <span className="font-semibold text-slate-800">{lc.issue}</span> • Loader:{' '}
-                    <span className="font-semibold text-slate-800">{lc.loader_user_id}</span>
+                  <p className="text-xs text-slate-600">
+                    Issue: <span className="font-semibold text-slate-800">{lc.issue}</span> (Expected {lc.expected_qty} vs Loaded {lc.loaded_qty}) • Loader:{' '}
+                    <span className="font-semibold text-slate-800">{lc.reported_by || 'Loader'}</span>
                   </p>
-                  {lc.notes && (
-                    <p className="text-xs text-slate-500 italic mt-0.5">Notes: {lc.notes}</p>
+                  {lc.note && (
+                    <p className="text-xs text-slate-500 italic">Loader Note: {lc.note}</p>
+                  )}
+                  {lc.status !== 'resolved' && (
+                    <input
+                      type="text"
+                      placeholder="Add note for Store Manager / cancellation reason..."
+                      value={noteInput[lc.id] || ''}
+                      onChange={(e) =>
+                        setNoteInput((prev) => ({ ...prev, [lc.id]: e.target.value }))
+                      }
+                      className="w-full mt-2 border border-slate-300 rounded px-2.5 py-1 text-xs focus:ring-1 focus:ring-brand-500"
+                    />
                   )}
                 </div>
 
                 {lc.status !== 'resolved' && (
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow transition-colors"
+                      onClick={() => handleResolve(lc.id, 'cancel_order')}
+                    >
+                      Cancel & Notify Store Manager
+                    </button>
+                    <button
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow transition-colors"
+                      onClick={() => handleResolve(lc.id, 'defer_order')}
+                    >
+                      Defer Order
+                    </button>
                     <button
                       className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow transition-colors"
                       onClick={() => handleResolve(lc.id, 'accept_shortfall')}
                     >
                       Accept Shortfall
-                    </button>
-                    <button
-                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow transition-colors"
-                      onClick={() => handleResolve(lc.id, 'reassign_stock')}
-                    >
-                      Reassign Stock
-                    </button>
-                    <button
-                      className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                      onClick={() => handleResolve(lc.id, 'reject_load')}
-                    >
-                      Reject Load
                     </button>
                   </div>
                 )}

@@ -265,11 +265,14 @@ class OrderHandoffApi {
 
     final entity = event['entity'];
     final data = event['data'];
+    final payload = event['payload'];
     final receipt = data is Map ? data['receipt'] : null;
     final identifiers = <String>{
       if (entity is Map && entity['id'] is String) entity['id'] as String,
       if (event['stop_id'] is String) event['stop_id'] as String,
       if (event['order_id'] is String) event['order_id'] as String,
+      if (payload is Map && payload['stop_id'] is String) payload['stop_id'] as String,
+      if (payload is Map && payload['order_id'] is String) payload['order_id'] as String,
       if (data is Map && data['stop_id'] is String) data['stop_id'] as String,
       if (data is Map && data['order_id'] is String) data['order_id'] as String,
       if (receipt is Map && receipt['stop_id'] is String)
@@ -321,6 +324,85 @@ class OrderHandoffApi {
       await _persistCachedTripHandoffs(driverId);
     }
     return completedOrderIds;
+  }
+
+  Future<TripHandoff?> syncTripHandoffFromServer({
+    required String tripId,
+    required String driverId,
+  }) async {
+    try {
+      final response = await _apiClient.get('/trips/$tripId/load-list');
+      final data = response.data;
+      if (data is Map && data['delivery_sequence'] is List) {
+        final stops = (data['delivery_sequence'] as List)
+            .map((s) => _asJsonMap(s))
+            .toList(growable: false);
+        await _loadCachedTripHandoffs(driverId);
+        final handoffs = _cachedTripHandoffs[driverId] ?? [];
+        final tripIndex = handoffs.indexWhere((h) => h.tripId == tripId);
+        if (tripIndex != -1) {
+          final handoff = handoffs[tripIndex];
+          var changed = false;
+          final updatedOrders = handoff.orders.map((order) {
+            final match = stops.firstWhere(
+              (s) => s['order_id'] == order.orderId || s['id'] == order.stopId,
+              orElse: () => const {},
+            );
+            if (match.isNotEmpty) {
+              final rawReceiptStatus = match['receipt_status'] as String?;
+              final rawStatus = match['status'] as String?;
+              ReceiptStatus newReceiptStatus = order.receiptStatus;
+              if (rawReceiptStatus == 'CONFIRMED' || rawStatus == 'DELIVERED') {
+                newReceiptStatus = ReceiptStatus.confirmed;
+              } else if (rawReceiptStatus == 'DISCREPANCY' || rawStatus == 'PARTIAL') {
+                newReceiptStatus = ReceiptStatus.discrepancy;
+              }
+              if (newReceiptStatus != order.receiptStatus) {
+                changed = true;
+                return order.copyWithReceiptStatus(newReceiptStatus);
+              }
+            }
+            return order;
+          }).toList(growable: false);
+
+          if (changed) {
+            final updatedHandoff = handoff.copyWithOrders(updatedOrders);
+            handoffs[tripIndex] = updatedHandoff;
+            await _persistCachedTripHandoffs(driverId);
+            for (final order in updatedOrders) {
+              final stop = DriverTrackedStop.fromTripHandoff(
+                tripId: tripId,
+                order: order,
+              );
+              final key = _trackingKey(stop.tripId, stop.orderId);
+              final existingIndex = _tripQrStops.indexWhere(
+                (existing) =>
+                    _trackingKey(existing.tripId, existing.orderId) == key,
+              );
+              if (existingIndex == -1) {
+                _tripQrStops.add(stop);
+              } else {
+                _tripQrStops[existingIndex] = stop;
+              }
+            }
+            return updatedHandoff;
+          }
+          return handoff;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> syncAllTripsFromServer({required String driverId}) async {
+    await _loadCachedTripHandoffs(driverId);
+    final handoffs = _cachedTripHandoffs[driverId] ?? [];
+    for (final handoff in handoffs) {
+      await syncTripHandoffFromServer(
+        tripId: handoff.tripId,
+        driverId: driverId,
+      );
+    }
   }
 
   void updateTrackedStop(TripStop update) {

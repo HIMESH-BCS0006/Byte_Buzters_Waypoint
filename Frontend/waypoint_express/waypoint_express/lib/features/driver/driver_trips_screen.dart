@@ -42,10 +42,12 @@ class _DriverTripsScreenState extends ConsumerState<DriverTripsScreen> {
       }
 
       final handoffApi = ref.read(orderHandoffApiProvider);
-      final orders = await handoffApi.getDriverOrders();
       final user = ref.read(authControllerProvider).user;
+      final driverId = user?.id ?? user?.username ?? 'driver';
+      await handoffApi.syncAllTripsFromServer(driverId: driverId);
+      final orders = await handoffApi.getDriverOrders();
       final scannedTrips = await handoffApi.getCachedTripHandoffs(
-        driverId: user?.id ?? user?.username ?? 'driver',
+        driverId: driverId,
       );
       if (!mounted) return;
       setState(() {
@@ -369,27 +371,71 @@ class _DriverTripsScreenState extends ConsumerState<DriverTripsScreen> {
             ),
             const SizedBox(height: 8),
             ..._scannedTrips.map(
-              (trip) => Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.route_outlined),
-                  ),
-                  title: Text(
-                    'Trip ${trip.tripNo} • ${trip.vehicleId}',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  subtitle: Text(
-                    '${trip.orders.length} orders • ${trip.depotId}',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => DriverTripHandoffScreen(handoff: trip),
+              (trip) {
+                final isCompleted = trip.orders.isNotEmpty &&
+                    trip.orders.every(
+                      (o) =>
+                          o.receiptStatus == ReceiptStatus.confirmed ||
+                          o.receiptStatus == ReceiptStatus.discrepancy,
+                    );
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isCompleted
+                          ? AppTheme.successGreen.withValues(alpha: 0.15)
+                          : AppTheme.primaryLight,
+                      child: Icon(
+                        isCompleted ? Icons.check_circle : Icons.route_outlined,
+                        color: isCompleted
+                            ? AppTheme.successGreen
+                            : AppTheme.primaryDark,
+                      ),
                     ),
+                    title: Text(
+                      'Trip ${trip.tripNo} • ${trip.vehicleId}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      '${trip.orders.length} orders • ${trip.depotId}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isCompleted)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.successGreen.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'COMPLETED',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.successGreen,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => DriverTripHandoffScreen(handoff: trip),
+                        ),
+                      );
+                      _refresh();
+                    },
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ],
           const SizedBox(height: 20),

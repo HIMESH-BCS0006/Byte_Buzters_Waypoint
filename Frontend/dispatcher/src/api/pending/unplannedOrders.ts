@@ -13,7 +13,7 @@ export const useGetUnplannedOrders = (params?: { depot_id?: string }) => {
         signal,
       });
       return (orders || []).filter(
-        (o) => o.status === 'SUBMITTED' || o.status === 'DEFERRED'
+        (o) => o.status === 'SUBMITTED'
       );
     },
   });

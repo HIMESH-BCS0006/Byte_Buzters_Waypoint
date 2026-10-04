@@ -32,7 +32,7 @@ export function useGetDashboard(params?: { depot_id?: string }) {
         params,
         signal,
       }),
-    refetchInterval: 15000,
+    refetchInterval: 4000,
   });
 }
 
@@ -46,7 +46,7 @@ export function useGetDispatchQueue(params?: { depot_id?: string }) {
         params,
         signal,
       }),
-    refetchInterval: 15000,
+    refetchInterval: 4000,
   });
 }
 

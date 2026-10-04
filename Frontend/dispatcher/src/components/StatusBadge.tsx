@@ -12,7 +12,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, type = 'genera
 
   if (['CONFIRMED', 'DELIVERED', 'LOADED', 'COMPLETED'].includes(upper)) {
     style = 'bg-mint-100 text-mint-900 border-mint-200';
-  } else if (['IN_PROGRESS', 'SCHEDULED', 'PLANNED', 'ARRIVED'].includes(upper)) {
+  } else if (['IN_PROGRESS', 'IN_TRANSIT', 'SCHEDULED', 'PLANNED', 'ARRIVED'].includes(upper)) {
     style = 'bg-blue-100 text-blue-800 border-blue-200';
   } else if (['SUBMITTED', 'PENDING'].includes(upper)) {
     style = 'bg-amber-100 text-amber-800 border-amber-200';
