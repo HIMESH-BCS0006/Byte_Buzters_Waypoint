@@ -102,3 +102,6 @@ Thumbs.db
 logs/
 tmp/
 temp/
+
+# Custom Ignore
+node_modules_old
