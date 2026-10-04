@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
@@ -11,8 +12,24 @@ import '../../features/driver/driver_track_screen.dart';
 import '../../features/driver/driver_history_screen.dart';
 import '../../features/driver/order_qr_scanner_screen.dart';
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authControllerProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final notifier = ref.watch(routerNotifierProvider);
   return GoRouter(
+    refreshListenable: notifier,
     initialLocation: '/login',
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
@@ -27,14 +44,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isLoggingIn ? null : '/login';
       }
 
-      // If user is authenticated and on login screen, route to their role shell
-      if (isLoggingIn) {
+      // If user is authenticated and on login screen or root, route to their role shell
+      if (isLoggingIn || state.matchedLocation == '/') {
         if (auth.user?.role == Role.driver) {
           return '/driver';
         } else if (auth.user?.role == Role.loader) {
           return '/loader';
-        } else {
-          return '/login';
         }
       }
 
@@ -51,6 +66,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          final auth = ref.read(authControllerProvider);
+          if (auth.user?.role == Role.driver) return '/driver';
+          if (auth.user?.role == Role.loader) return '/loader';
+          return '/login';
+        },
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),

@@ -27,6 +27,15 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, isInitial: true, clearError: true);
     try {
       String? token = Uri.base.queryParameters['token'];
+      if (token == null || token.isEmpty) {
+        if (Uri.base.fragment.contains('token=')) {
+          try {
+            final fragmentUri = Uri.parse(Uri.base.fragment);
+            token = fragmentUri.queryParameters['token'];
+          } catch (_) {}
+        }
+      }
+
       if (token != null && token.isNotEmpty) {
         await _tokenStorage.saveToken(token);
       } else {
