@@ -225,7 +225,7 @@
           targetUrl = `http://${hostname}:3000/?token=${token}`;
           roleName = 'Dispatcher Dashboard (Port 3000)';
         } else if (role === 'store_manager') {
-          targetUrl = `http://${hostname}:3001/?token=${token}`;
+          targetUrl = `http://${hostname}:3001/store?token=${token}`;
           roleName = 'Store Manager Portal (Port 3001)';
         } else if (role === 'driver') {
           targetUrl = `http://${hostname}:3002/#/driver?token=${token}`;

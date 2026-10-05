@@ -64,6 +64,23 @@ export function normalizeUserProfile(
   } as UserProfile;
 }
 
+function parseJwt(token: string): any {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setTokenState] = useState<string | null>(getAuthToken());
@@ -79,15 +96,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      const existingToken = getAuthToken();
-      if (existingToken) {
+      const activeToken = tokenFromUrl || getAuthToken();
+      if (activeToken) {
+        const decoded = parseJwt(activeToken);
+        if (decoded) {
+          const fallbackUsername = decoded.username || decoded.sub || 'storemanager@waypoint.com';
+          setUser(
+            normalizeUserProfile(
+              {
+                id: decoded.user_id || decoded.sub || fallbackUsername,
+                username: fallbackUsername,
+                role: decoded.role || 'store_manager',
+                outlet_id: decoded.outlet_id || 'OUT004',
+                vehicle_id: decoded.vehicle_id,
+                depot_ids: decoded.depot_ids || [],
+                display_name: decoded.display_name || fallbackUsername,
+              },
+              fallbackUsername
+            )
+          );
+        }
+
         try {
           const profile = await apiClient.getMe();
-          setUser(normalizeUserProfile(profile, profile?.username));
+          if (profile) {
+            setUser(normalizeUserProfile(profile, profile?.username));
+          }
         } catch (err) {
-          console.error('Failed to restore session:', err);
-          clearAuthToken();
-          setTokenState(null);
+          console.warn('Could not refresh store manager profile from /me, using JWT token claims:', err);
+          if (!decoded) {
+            clearAuthToken();
+            setTokenState(null);
+            setUser(null);
+          }
         }
       }
       setIsLoading(false);

@@ -42,6 +42,9 @@ const getBaseUrl = (): string => {
   } catch (e) {
     // ignore
   }
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    return `http://${window.location.hostname}:8000/api/v1`;
+  }
   // Docker API runs on port 8000 with /api/v1 prefix
   return 'http://localhost:8000/api/v1';
 };
