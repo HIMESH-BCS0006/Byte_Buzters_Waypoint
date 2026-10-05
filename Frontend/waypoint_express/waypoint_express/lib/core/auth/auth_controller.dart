@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:js' as js;
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../errors/app_exception.dart';
@@ -178,5 +180,11 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _tokenStorage.clearToken();
     state = const AuthState(isInitial: false);
+    if (kIsWeb) {
+      final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+      try {
+        js.context.callMethod('redirectRolePortal', ['http://$host']);
+      } catch (_) {}
+    }
   }
 }

@@ -24,6 +24,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final auth = ref.read(authControllerProvider);
+        if (!auth.isInitial && !auth.isAuthenticated) {
+          final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+          try {
+            js.context.callMethod('redirectRolePortal', ['http://$host']);
+          } catch (_) {}
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();

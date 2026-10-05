@@ -127,6 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearAuthToken();
     setTokenState(null);
     setUser(null);
+    const host = window.location.hostname || 'localhost';
+    window.location.href = `http://${host}`;
   };
 
   return (

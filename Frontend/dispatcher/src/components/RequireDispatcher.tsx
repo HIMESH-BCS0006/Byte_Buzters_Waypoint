@@ -20,7 +20,9 @@ export const RequireDispatcher: React.FC<RequireDispatcherProps> = ({ children }
   }
 
   if (!token || !user) {
-    return <Navigate to="/login" replace />;
+    const host = window.location.hostname || 'localhost';
+    window.location.href = `http://${host}`;
+    return null;
   }
 
   if (role !== 'dispatcher') {

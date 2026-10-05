@@ -76,6 +76,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    const host = window.location.hostname || 'localhost';
+    window.location.href = `http://${host}`;
   };
 
   const role = user?.role || null;

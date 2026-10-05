@@ -73,6 +73,18 @@ services:
     depends_on:
       - api
 
+  login_portal:
+    build:
+      context: ./Frontend/login_portal
+      dockerfile: Dockerfile
+    container_name: waypoint_login
+    restart: always
+    ports:
+      - "80:80"
+      - "8080:80"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
 

@@ -21,7 +21,9 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ allowedRoles, children
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    const host = window.location.hostname || 'localhost';
+    window.location.href = `http://${host}`;
+    return null;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
